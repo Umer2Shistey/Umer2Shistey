@@ -1,0 +1,313 @@
+<title>Giant Peach Anime Test</title>
+<style>
+@font-face { font-family: "Fraunces Local"; src: url("assets/fraunces-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+@font-face { font-family: "Fraunces Local"; src: url("assets/fraunces-italic.woff2") format("woff2"); font-weight: 100 900; font-style: italic; font-display: block; }
+@font-face { font-family: "Fredoka Local"; src: url("assets/fredoka.woff2") format("woff2"); font-weight: 500 700; font-display: block; }
+/* Layout: the 16:9 test up top, an honest scorecard beneath. Committed dark look to match the storybook pages. */
+:root {
+  --ground: #0F1322;
+  --card: #181D30;
+  --line: #2C3350;
+  --text: #EEF1FA;
+  --muted: #A9B1CC;
+  --peach: #FF9A5A;
+  --good: #7FD6A0;
+  --bad: #F28A8A;
+  --serif: "Fraunces Local", Georgia, serif;
+  color-scheme: dark;
+}
+html, body { background: var(--ground); color: var(--text); }
+body { font-family: var(--serif); padding-inline: 16px; padding-block: 26px 56px; }
+.wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 22px; }
+header { display: grid; gap: 8px; max-width: 72ch; }
+h1 { margin: 0; font-size: clamp(26px, 4vw, 42px); font-weight: 800; line-height: 1.08; text-wrap: balance; }
+h1 em { color: var(--peach); }
+header p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.55; }
+.stage { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #000; }
+canvas { display: block; width: 100%; height: 100%; }
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; min-width: 0; }
+h2 { margin: 0; font-size: 21px; }
+h2.ok { color: var(--good); }
+h2.no { color: var(--bad); }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; line-height: 1.5; font-size: 16px; }
+.refs { color: var(--muted); font-size: 15px; line-height: 1.55; margin: 0; }
+@media (max-width: 760px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>The Giant Peach, <em>anime</em> test</h1>
+    <p>Four shots, nine seconds, looping: a painted sunset wide shot, an extreme close-up on James's eyes, an impact frame on the peach, and a hero shot. It's built the way TV anime saves drawing time, with held drawings, camera moves, speed lines and flashes doing the work.</p>
+  </header>
+  <div class="stage"><canvas id="c" width="1920" height="1080" aria-label="Anime style test of the giant peach moment"></canvas></div>
+  <div class="cols">
+    <div class="card">
+      <h2 class="ok">What holds up</h2>
+      <ul>
+        <li>Painted skies: glowing cumulus clouds, light rays and lens flare.</li>
+        <li>Cel shading: a flat base colour, one hard-edged shadow and a sharp highlight.</li>
+        <li>The cinematic language: speed lines, impact flashes, camera shake and the eye close-up.</li>
+        <li>Big, shiny anime eyes, held still with small movements like the pupils shrinking in shock.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2 class="no">Where it breaks</h2>
+      <ul>
+        <li>Characters from new angles. I drew one front-facing face; turning the head would need a new drawing I can't keep consistent.</li>
+        <li>Real acting: running, fighting, crying or talking with lip sync would look stiff.</li>
+        <li>Hair and cloth flowing in the wind, which anime does beautifully by hand.</li>
+        <li>A full episode. This works for trailers, openings and short dramatic beats, not ten minutes of character animation.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="refs">Look at these for the direction this borrows from: Makoto Shinkai's skies in Your Name and Suzume; Studio Trigger's impact frames and speed lines (Kill la Kill, Promare); the eye close-ups that nearly every shonen series uses for a moment of shock.</p>
+</div>
+
+<script>
+(() => {
+  const W = 1920, H = 1080, D = 9;
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const outBack = t => { if (t >= 1) return 1; const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const SERIF = '"Fraunces Local", Georgia, serif';
+  const INK = '#1B1428';
+
+  // ---------- painted sky ----------
+  function sky(t, sunX, sunY, s = 1) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#16215C'); g.addColorStop(0.35, '#5B3E8C'); g.addColorStop(0.62, '#E8728A'); g.addColorStop(0.8, '#FFA86A'); g.addColorStop(1, '#FFDFA0');
+    ctx.fillStyle = g; ctx.fillRect(-100, -200, W + 200, H + 400);
+    const r = rng(2); ctx.fillStyle = '#FFFFFF';
+    for (let i = 0; i < 120; i++) { const y = r() * 360; ctx.globalAlpha = (1 - y / 360) * (0.4 + 0.5 * Math.sin(t * 2 + i)); ctx.fillRect(r() * W, y, 2, 2); }
+    ctx.globalAlpha = 1;
+    // sun glow and rays
+    const sg = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 700 * s);
+    sg.addColorStop(0, 'rgba(255,245,210,1)'); sg.addColorStop(0.15, 'rgba(255,220,150,0.8)'); sg.addColorStop(1, 'rgba(255,170,120,0)');
+    ctx.fillStyle = sg; ctx.fillRect(-100, -200, W + 200, H + 400);
+    ctx.save(); ctx.globalCompositeOperation = 'screen';
+    for (let i = 0; i < 14; i++) {
+      const a = i / 14 * Math.PI * 2 + t * 0.04, w = 0.05 + (i % 3) * 0.03;
+      ctx.fillStyle = `rgba(255,230,180,${0.07 + (i % 2) * 0.05})`;
+      ctx.beginPath(); ctx.moveTo(sunX, sunY); ctx.arc(sunX, sunY, 2200, a, a + w); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // cumulus with cel shading: lavender body, hard-edged sunlit tops
+  function cumulus(x, y, s, t, seed) {
+    const r = rng(seed), puffs = [];
+    for (let i = 0; i < 11; i++) { const a = r(); puffs.push([(a - 0.5) * 520, -Math.sin(a * Math.PI) * 160 * (0.6 + r() * 0.5) + r() * 30, 70 + r() * 70]); }
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    const body = () => { ctx.beginPath(); puffs.forEach(([px, py, pr]) => { ctx.moveTo(px + pr, py); ctx.arc(px, py, pr, 0, 7); }); };
+    body(); ctx.fillStyle = '#8C6FB0'; ctx.fill();
+    ctx.save(); body(); ctx.clip();
+    ctx.beginPath(); puffs.forEach(([px, py, pr]) => { ctx.moveTo(px + pr - 26, py - 22); ctx.arc(px - 26, py - 22, pr * 0.92, 0, 7); }); ctx.fillStyle = '#F2A0B0'; ctx.fill();
+    ctx.beginPath(); puffs.forEach(([px, py, pr]) => { ctx.moveTo(px + pr - 44, py - 44); ctx.arc(px - 44, py - 44, pr * 0.7, 0, 7); }); ctx.fillStyle = '#FFE0B0'; ctx.fill();
+    ctx.restore(); ctx.restore();
+  }
+  function flare(sx, sy, a) {
+    ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = a;
+    const dx = W / 2 - sx, dy = H / 2 - sy;
+    [[0.3, 40, 'rgba(255,200,150,0.35)'], [0.6, 20, 'rgba(180,220,255,0.35)'], [0.9, 70, 'rgba(255,150,200,0.2)'], [1.3, 30, 'rgba(255,240,180,0.35)']].forEach(([k, r, c]) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(sx + dx * k, sy + dy * k, r, 0, 7); ctx.fill(); });
+    ctx.restore();
+  }
+  // ---------- cel-shaded peach ----------
+  function peach(x, y, r, t, rim = 1) {
+    ctx.save(); ctx.translate(x, y);
+    const body = () => { ctx.beginPath(); ctx.moveTo(0, -r * 0.82); ctx.bezierCurveTo(r * 0.55, -r * 1.08, r * 1.05, -r * 0.55, r, r * 0.05); ctx.bezierCurveTo(r * 0.96, r * 0.7, r * 0.5, r, 0, r); ctx.bezierCurveTo(-r * 0.5, r, -r * 0.96, r * 0.7, -r, r * 0.05); ctx.bezierCurveTo(-r * 1.05, -r * 0.55, -r * 0.55, -r * 1.08, 0, -r * 0.82); ctx.closePath(); };
+    body(); ctx.fillStyle = '#FF8E52'; ctx.fill();
+    ctx.save(); body(); ctx.clip();
+    // hard shadow (light from upper left)
+    ctx.beginPath(); ctx.ellipse(r * 0.45, r * 0.4, r * 1.0, r * 0.95, -0.4, 0, 7); ctx.fillStyle = '#E0503E'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(r * 0.7, r * 0.75, r * 0.7, r * 0.6, -0.4, 0, 7); ctx.fillStyle = '#B83A40'; ctx.fill();
+    // rim light
+    ctx.strokeStyle = `rgba(255,236,190,${0.9 * rim})`; ctx.lineWidth = r * 0.05; ctx.beginPath(); ctx.arc(-r * 0.04, r * 0.02, r * 0.97, 2.4, 4.1); ctx.stroke();
+    // specular
+    ctx.fillStyle = '#FFF4DC'; ctx.beginPath(); ctx.ellipse(-r * 0.45, -r * 0.45, r * 0.16, r * 0.08, -0.7, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-r * 0.27, -r * 0.6, r * 0.05, r * 0.03, -0.7, 0, 7); ctx.fill();
+    ctx.restore();
+    body(); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, r * 0.018); ctx.stroke();
+    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(2, r * 0.016); ctx.beginPath(); ctx.moveTo(0, -r * 0.8); ctx.bezierCurveTo(r * 0.22, -r * 0.35, r * 0.2, r * 0.3, r * 0.02, r * 0.9); ctx.stroke();
+    // stem + leaf
+    ctx.strokeStyle = '#5A3420'; ctx.lineWidth = r * 0.07; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-r * 0.02, -r * 0.8); ctx.quadraticCurveTo(0, -r * 1.02, r * 0.1, -r * 1.12); ctx.stroke();
+    ctx.save(); ctx.translate(r * 0.08, -r * 0.95); ctx.rotate(-0.5 + Math.sin(t * 3) * 0.08);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(r * 0.28, -r * 0.3, r * 0.62, -r * 0.12); ctx.quadraticCurveTo(r * 0.3, r * 0.1, 0, 0); ctx.fillStyle = '#4FB060'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(r * 0.3, r * 0.1, r * 0.62, -r * 0.12); ctx.quadraticCurveTo(r * 0.3, 0, 0, 0); ctx.fillStyle = '#2F7A48'; ctx.fill();
+    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.5, r * 0.012); ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(r * 0.28, -r * 0.3, r * 0.62, -r * 0.12); ctx.quadraticCurveTo(r * 0.3, r * 0.1, 0, 0); ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+  }
+  function hills(t, y0, dark) {
+    ctx.beginPath(); ctx.moveTo(-50, H + 50);
+    for (let x = -50; x <= W + 50; x += 40) ctx.lineTo(x, y0 - Math.sin(x * 0.003 + 1) * 60 - Math.sin(x * 0.009) * 18);
+    ctx.lineTo(W + 50, H + 50); ctx.closePath(); ctx.fillStyle = dark; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,140,0.8)'; ctx.lineWidth = 4; ctx.beginPath();
+    for (let x = -50; x <= W + 50; x += 40) { const y = y0 - Math.sin(x * 0.003 + 1) * 60 - Math.sin(x * 0.009) * 18; x === -50 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  function petals(t, n = 40, col = '#FFC2D0') {
+    const r = rng(12);
+    for (let i = 0; i < n; i++) {
+      const sp = 80 + r() * 120, ph = r() * 20, x = ((r() * W + t * sp) % (W + 200)) - 100, y = ((r() * H + t * sp * 0.6 + ph * 40) % (H + 100)) - 50;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(t * 2 + i); ctx.scale(1, Math.abs(Math.sin(t * 3 + i)) * 0.8 + 0.2);
+      ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, 9, 5, 0, 0, 7); ctx.fill(); ctx.restore();
+    }
+  }
+  function speedLines(cx, cy, t, col, n = 90, inner = 260) {
+    const r = rng(Math.floor(t * 12) + 5);
+    ctx.save(); ctx.fillStyle = col;
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, w = 0.004 + r() * 0.012, r0 = inner + r() * 260;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a - w) * 2400, cy + Math.sin(a - w) * 2400); ctx.lineTo(cx + Math.cos(a + w) * 2400, cy + Math.sin(a + w) * 2400); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // ---------- James, anime close-up (front view, one drawing) ----------
+  function eye(x, y, flip, t, shock, peachR) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(flip, 1);
+    // white
+    ctx.beginPath(); ctx.moveTo(-95, 10); ctx.quadraticCurveTo(-60, -95, 40, -92); ctx.quadraticCurveTo(95, -80, 100, -20); ctx.quadraticCurveTo(80, 95, 0, 100); ctx.quadraticCurveTo(-80, 95, -95, 10); ctx.closePath();
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle = 'rgba(120,110,170,0.35)'; ctx.fillRect(-120, -100, 240, 40);
+    // iris
+    const ir = lerp(78, 62, shock), jit = shock > 0.5 ? Math.sin(t * 60) * 3 : 0;
+    const ig = ctx.createLinearGradient(0, -ir, 0, ir); ig.addColorStop(0, '#2A1A10'); ig.addColorStop(0.55, '#7A4A2A'); ig.addColorStop(1, '#D08A4A');
+    ctx.beginPath(); ctx.ellipse(8 + jit, 10, ir * 0.82, ir, 0, 0, 7); ctx.fillStyle = ig; ctx.fill();
+    ctx.strokeStyle = '#1A0E08'; ctx.lineWidth = 4; ctx.stroke();
+    // pupil shrinks with shock
+    ctx.beginPath(); ctx.ellipse(8 + jit, 10, lerp(30, 12, shock), lerp(38, 16, shock), 0, 0, 7); ctx.fillStyle = '#0E0806'; ctx.fill();
+    // the peach reflected in the eye
+    if (peachR > 0) { ctx.beginPath(); ctx.arc(22 + jit, 38, peachR, 0, 7); ctx.fillStyle = 'rgba(255,150,90,0.9)'; ctx.fill(); }
+    // highlights
+    ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.ellipse(-18 + jit, -22, 22, 16, -0.4, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(36 + jit, 44, 8, 0, 7); ctx.fill();
+    ctx.restore();
+    // lashes
+    ctx.strokeStyle = '#1A0E08'; ctx.lineCap = 'round'; ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.moveTo(-102, 16); ctx.quadraticCurveTo(-62, -100, 42, -96); ctx.quadraticCurveTo(98, -84, 108, -30); ctx.stroke();
+    ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(108, -30); ctx.lineTo(126, -40); ctx.stroke();
+    ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-60, 88); ctx.quadraticCurveTo(0, 108, 60, 90); ctx.stroke();
+    // brow
+    ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(-90, lerp(-150, -175, shock)); ctx.quadraticCurveTo(-10, lerp(-178, -205, shock), 90, lerp(-160, -185, shock)); ctx.stroke();
+    ctx.restore();
+  }
+  function closeUp(t, local) {
+    const shock = outBack(prog(local, 0.95, 1.15));
+    const push = lerp(1.0, 1.12, local / 2);
+    const sh = shock > 0 && local < 1.6 ? (1 - prog(local, 1.0, 1.6)) * 14 : 0;
+    ctx.save(); ctx.translate(W / 2 + Math.sin(t * 90) * sh, H / 2 + Math.cos(t * 80) * sh); ctx.scale(push, push); ctx.translate(-W / 2, -H / 2);
+    // background: warm speed lines on the shock
+    ctx.fillStyle = shock > 0 ? '#FFB27A' : '#F2C0A0'; ctx.fillRect(-200, -200, W + 400, H + 400);
+    if (shock > 0) speedLines(W / 2, H / 2, t, 'rgba(255,245,230,0.75)', 110, 420);
+    // face
+    ctx.beginPath(); ctx.moveTo(560, 200); ctx.lineTo(1360, 200); ctx.quadraticCurveTo(1400, 700, 1180, 1000); ctx.quadraticCurveTo(960, 1180, 740, 1000); ctx.quadraticCurveTo(520, 700, 560, 200); ctx.closePath();
+    ctx.fillStyle = '#FFD9BC'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.stroke();
+    // cel shadow under the fringe
+    ctx.beginPath(); ctx.moveTo(560, 300); ctx.lineTo(1360, 300); ctx.lineTo(1360, 420); ctx.lineTo(1200, 380); ctx.lineTo(1080, 440); ctx.lineTo(960, 390); ctx.lineTo(840, 450); ctx.lineTo(720, 380); ctx.lineTo(560, 430); ctx.closePath(); ctx.fillStyle = '#F2B89A'; ctx.fill();
+    // blush hatching
+    ctx.strokeStyle = 'rgba(240,110,120,0.7)'; ctx.lineWidth = 5; for (let k = 0; k < 5; k++) { [720, 1200].forEach(bx => { ctx.beginPath(); ctx.moveTo(bx - 40 + k * 18, 760); ctx.lineTo(bx - 56 + k * 18, 800); ctx.stroke(); }); }
+    const peachR = lerp(4, 16, prog(local, 1.0, 1.8));
+    eye(760, 620, 1, t, shock, peachR); eye(1160, 620, -1, t, shock, peachR);
+    // nose + mouth
+    ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(975, 760); ctx.lineTo(962, 800); ctx.stroke();
+    if (shock > 0) { ctx.beginPath(); ctx.ellipse(960, 900, 26 * shock, 34 * shock, 0, 0, 7); ctx.fillStyle = '#7A2A3A'; ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.moveTo(930, 900); ctx.lineTo(990, 900); ctx.stroke(); }
+    // hair: brown spikes with a shine band
+    ctx.beginPath(); ctx.moveTo(460, 120);
+    [[560, 470], [640, 300], [700, 520], [800, 320], [880, 540], [960, 330], [1040, 550], [1120, 320], [1210, 520], [1280, 300], [1370, 470], [1460, 120]].forEach(([hx, hy]) => ctx.lineTo(hx, hy + Math.sin(t * 2 + hx) * 3));
+    ctx.lineTo(1460, -100); ctx.lineTo(460, -100); ctx.closePath();
+    ctx.fillStyle = '#6A3A22'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 6; ctx.stroke();
+    ctx.save(); ctx.clip(); ctx.fillStyle = '#9A5A36';
+    ctx.beginPath(); ctx.moveTo(560, 200); ctx.quadraticCurveTo(960, 140, 1360, 200); ctx.lineTo(1360, 240); ctx.quadraticCurveTo(960, 180, 560, 240); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#E8B08A'; [[700, 214], [850, 196], [1010, 192], [1170, 200]].forEach(([hx, hy]) => { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + 50, hy - 6); ctx.lineTo(hx + 30, hy + 14); ctx.closePath(); ctx.fill(); });
+    ctx.restore();
+    // sweat drop
+    if (shock > 0) { const d = prog(local, 1.1, 1.9); ctx.save(); ctx.translate(1330, 360 + d * 60); ctx.beginPath(); ctx.moveTo(0, -40); ctx.quadraticCurveTo(26, 10, 0, 22); ctx.quadraticCurveTo(-26, 10, 0, -40); ctx.fillStyle = '#BFE6FF'; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 4; ctx.stroke(); ctx.restore(); }
+    ctx.restore();
+    // cinematic bars for the eye band
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, 170); ctx.fillRect(0, H - 170, W, 170);
+  }
+  // tiny James silhouette for wide shots
+  function jamesSmall(x, y, s, arms) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = '#1B1428'; ctx.strokeStyle = '#1B1428'; ctx.lineCap = 'round';
+    ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(-7, -40); ctx.lineTo(-10, 0); ctx.moveTo(7, -40); ctx.lineTo(10, 0); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(-16, -92, 32, 54, 10); ctx.fill();
+    ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(-14, -84); ctx.lineTo(-14 - Math.sin(arms) * 36, -84 + Math.cos(arms) * 36); ctx.moveTo(14, -84); ctx.lineTo(14 + Math.sin(arms) * 36, -84 + Math.cos(arms) * 36); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -112, 22, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-25, -114); [[-28, -128], [-19, -136], [-16, -146], [-6, -140], [0, -150], [7, -140], [16, -145], [19, -135], [28, -128], [25, -114]].forEach(([a, b]) => ctx.lineTo(a, b)); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,140,0.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, -112, 22, 3.6, 5.2); ctx.stroke();
+    ctx.restore();
+  }
+  function bigWord(t, t0, x, y, size) {
+    const k = outBack(prog(t, t0, t0 + 0.25)); if (k <= 0) return;
+    const sh = Math.sin(t * 70) * 5 * (1 - prog(t, t0, t0 + 0.8));
+    ctx.save(); ctx.translate(x + sh, y); ctx.rotate(-0.1); ctx.scale(k, k); ctx.transform(1, 0, -0.25, 1, 0, 0);
+    ctx.font = `italic 900 ${size}px ${SERIF}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = size * 0.34; ctx.strokeStyle = '#FF7A3A'; ctx.strokeText('BIGGER!!', 0, 0);
+    ctx.lineWidth = size * 0.2; ctx.strokeStyle = INK; ctx.strokeText('BIGGER!!', 0, 0);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillText('BIGGER!!', 0, 0);
+    ctx.restore();
+  }
+
+  function renderAt(t) {
+    t = ((t % D) + D) % D;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    if (t < 2.6) {
+      // shot 1: wide, the peach swells on the hilltop; camera drifts up
+      const k = t / 2.6, cy = lerp(40, -20, ease(k));
+      ctx.save(); ctx.translate(0, cy);
+      sky(t, 1380, 560);
+      cumulus(360, 420, 1.1, t, 3); cumulus(1500, 330, 0.8, t, 7); cumulus(900, 250, 0.55, t, 11);
+      hills(t, 820, '#2A1E48'); hills(t, 930, '#1B1430');
+      const r = lerp(60, 170, ease(prog(t, 0.4, 2.4))) + Math.sin(t * 8) * 2;
+      peach(1050, 900 - r * 0.97, r, t);
+      jamesSmall(760, 922, 1.1, -0.2);
+      ctx.restore();
+      petals(t, 36);
+      flare(1380, 560 + cy, 0.8);
+    } else if (t < 4.6) {
+      // shot 2: extreme close-up, the moment he realises
+      closeUp(t, t - 2.6);
+    } else if (t < 6.6) {
+      // shot 3: impact frame + low-angle hero shot of the peach
+      const l = t - 4.6;
+      const flashInv = l < 0.12 || (l > 0.2 && l < 0.26);
+      ctx.fillStyle = '#FFE4C8'; ctx.fillRect(0, 0, W, H);
+      speedLines(W / 2, 640, t, 'rgba(90,40,70,0.55)', 130, 360);
+      const r = lerp(330, 380, outBack(prog(l, 0, 0.4)));
+      const sh = (1 - prog(l, 0, 0.7)) * 18;
+      peach(W / 2 + Math.sin(t * 80) * sh, 640 + Math.cos(t * 70) * sh, r, t, 1);
+      bigWord(t, 4.72, W / 2, 190, 170);
+      if (flashInv) { ctx.save(); ctx.globalCompositeOperation = 'difference'; ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); ctx.restore(); ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    } else {
+      // shot 4: pull back, James tiny beside the giant peach, sun behind
+      const l = (t - 6.6) / 2.4;
+      const z = lerp(1.25, 1.0, ease(l));
+      ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-W / 2, -H / 2);
+      sky(t, 1100, 520, 1.2);
+      cumulus(300, 360, 1.2, t, 3); cumulus(1600, 300, 0.9, t, 7);
+      hills(t, 840, '#2A1E48'); hills(t, 950, '#1B1430');
+      peach(1100, 940 - 330 * 0.97, 330, t, 1);
+      jamesSmall(640, 948, 1.2, -2.5 + Math.sin(t * 10) * 0.25);
+      ctx.restore();
+      petals(t, 50);
+      flare(1100, 520, 0.9);
+      // fade back to the loop start
+      const f = prog(t, 8.6, 9); if (f > 0) { ctx.fillStyle = `rgba(255,240,220,${f})`; ctx.fillRect(0, 0, W, H); }
+    }
+    // film grain + vignette for the painted-cel feel
+    ctx.save(); const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 1.05); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(10,5,30,0.4)'); ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+  window.renderAt = renderAt; window.reelDuration = D;
+  let start = null;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function loop(now) { if (start == null) start = now; renderAt((now - start) / 1000); requestAnimationFrame(loop); }
+  Promise.all([document.fonts.load(`italic 900 40px ${SERIF}`)]).catch(() => {}).then(() => { window.reelReady = true; if (reduce) renderAt(5.2); else requestAnimationFrame(loop); });
+  renderAt(0.5);
+})();
+</script>
