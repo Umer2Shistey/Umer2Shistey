@@ -1,0 +1,384 @@
+<title>Giant Peach Style Board</title>
+<style>
+@font-face { font-family: "Fraunces Local"; src: url("assets/fraunces-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+@font-face { font-family: "Fraunces Local"; src: url("assets/fraunces-italic.woff2") format("woff2"); font-weight: 100 900; font-style: italic; font-display: block; }
+@font-face { font-family: "Fredoka Local"; src: url("assets/fredoka.woff2") format("woff2"); font-weight: 500 700; font-display: block; }
+/* Layout: an intro, then a two-column grid of style cards (one column on phones). Each card: live 16:9 sample, name, references, fit. Committed dark storybook look. */
+:root {
+  --ground: #1A120D;
+  --card: #251A13;
+  --line: #3E2D22;
+  --text: #FBF1DD;
+  --muted: #C9B596;
+  --peach: #F7894F;
+  --good: #9CC46A;
+  --serif: "Fraunces Local", Georgia, serif;
+  color-scheme: dark;
+}
+html, body { background: var(--ground); color: var(--text); }
+body { font-family: var(--serif); padding-inline: 16px; padding-block: 28px 56px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; max-width: 70ch; }
+h1 { margin: 0; font-size: clamp(28px, 4.2vw, 46px); font-weight: 800; line-height: 1.05; text-wrap: balance; }
+h1 em { color: var(--peach); font-weight: 600; }
+header p { margin: 0; color: var(--muted); font-size: 17px; line-height: 1.55; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: grid; min-width: 0; }
+canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #000; }
+.body { padding: 16px 18px 20px; display: grid; gap: 10px; min-width: 0; }
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h2 { margin: 0; font-size: 24px; font-weight: 700; }
+h2 span { color: var(--muted); font-weight: 500; font-style: italic; font-size: 15px; margin-left: 6px; }
+.fit { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ground); background: var(--good); padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.fit.mid { background: #F2C14B; }
+.feel { margin: 0; line-height: 1.5; font-size: 16px; }
+dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; font-size: 15px; line-height: 1.45; }
+dt { color: var(--muted); font-style: italic; }
+dd { margin: 0; }
+.note { color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 80ch; margin: 0; }
+@media (max-width: 820px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { canvas { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>One scene, <em>eight</em> ways to tell it</h1>
+    <p>The same moment from the Giant Peach film, "It grew bigger... and BIGGER!", drawn in each storytelling style I can build well. Every sample is live code, so what you see is what a full video in that style would look like. The references are real books, films and artists to look at for each direction, not things I would copy.</p>
+  </header>
+  <div class="grid" id="grid"></div>
+  <p class="note">"Strong fit" means I can make a full video in that style at the quality of the Giant Peach film. "Good fit" means it works well, with a limit noted under "Watch out for". Styles that depend on frame-by-frame character acting, such as anime or Disney-style cel animation, are left out on purpose, because my version would look stiff.</p>
+</div>
+
+<script>
+(() => {
+  const W = 960, H = 540;
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const outBack = t => { if (t >= 1) return 1; const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const NZ = (() => { const r = rng(9), a = []; for (let i = 0; i < 512; i++) a.push(r() * 2 - 1); return a; })();
+  const nz = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return lerp(NZ[i & 511], NZ[(i + 1) & 511], u); };
+  const SERIF = '"Fraunces Local", Georgia, serif', ROUND = '"Fredoka Local", "Arial Rounded MT Bold", sans-serif';
+
+  // ---------- the shared scene, as plain geometry ----------
+  const circlePts = (x, y, r, n = 28) => Array.from({ length: n }, (_, i) => [x + Math.cos(i / n * Math.PI * 2) * r, y + Math.sin(i / n * Math.PI * 2) * r]);
+  const rectPts = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  function peachPts(x, y, r) {
+    const pts = [];
+    for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2 - Math.PI / 2; const dip = 1 - 0.12 * Math.exp(-Math.pow((a + Math.PI / 2) * 3, 2)); pts.push([x + Math.cos(a) * r * dip, y + Math.sin(a) * r * dip * 0.98]); }
+    return pts;
+  }
+  // loop: small peach on the branch -> grows -> huge on the ground -> BIGGER!
+  function sceneAt(t) {
+    const L = 5.2, u = t % L;
+    let r, onGround;
+    if (u < 0.9) r = lerp(0, 16, outBack(prog(u, 0.1, 0.8)));
+    else if (u < 2.1) r = lerp(16, 48, outBack(prog(u, 0.9, 1.7)));
+    else r = lerp(48, 118, outBack(prog(u, 2.1, 3.0)));
+    onGround = clamp((r - 40) / 60);
+    const bx = 318, by = 205;
+    const px = lerp(bx, 596, onGround), py = lerp(by + r + 6, 432 - r * 0.97, onGround);
+    const sway = Math.sin(t * 1.4) * 3;
+    const shapes = [];
+    const SHARP = { house: 1, roof: 1, door: 1, window: 1, shirt: 1, shorts: 1 };
+    const S = (role, pts, extra = {}) => { if (SHARP[role]) pts.sharp = true; shapes.push({ role, pts, ...extra }); };
+    S('hillFar', [[-20, 320], ...Array.from({ length: 22 }, (_, i) => [i * 48, 300 - Math.sin(i * 0.5 + 1) * 28 - Math.sin(i * 1.3) * 10]), [1000, 320], [1000, 560], [-20, 560]]);
+    S('ground', [[-20, 440], ...Array.from({ length: 22 }, (_, i) => [i * 48, 428 - Math.sin(i * 0.4) * 10]), [1000, 440], [1000, 560], [-20, 560]]);
+    S('trunk', [[238, 432], [248, 300], [236, 230], [262, 230], [270, 300], [282, 432]]);
+    S('trunk', [[248, 250], [214, 196], [224, 190], [262, 244]], { thin: true });
+    S('trunk', [[262, 244], [314, 202], [320, 210], [270, 256]], { thin: true });
+    [[200, 190, 52], [262, 160, 60], [316, 188, 48], [232, 226, 40], [292, 226, 42]].forEach(([x, y, rr], i) => S('leaf', circlePts(x + sway * (i % 2 ? 1 : -1), y, rr, 22), { idx: i }));
+    // house
+    S('house', rectPts(752, 306, 176, 128));
+    S('roof', [[736, 310], [840, 236], [944, 310]]);
+    S('door', rectPts(856, 362, 42, 72));
+    S('window', rectPts(776, 334, 46, 40));
+    // James
+    const jx = 400, jy = 434, look = onGround > 0.5;
+    const cheer = (u > 3.0 && u < 4.8) ? Math.sin(t * 9) * 0.25 : 0;
+    const armA = u > 3.0 ? -2.5 + cheer : -0.3;
+    S('shorts', rectPts(jx - 14, jy - 58, 28, 16));
+    S('shirt', [[jx - 16, jy - 96], [jx + 16, jy - 96], [jx + 17, jy - 54], [jx - 17, jy - 54]]);
+    S('skin', circlePts(jx, jy - 118, 22, 20), { head: true });
+    S('hair', [[jx - 22, jy - 124], [jx - 24, jy - 140], [jx - 12, jy - 150], [jx - 2, jy - 144], [jx + 6, jy - 154], [jx + 14, jy - 144], [jx + 24, jy - 146], [jx + 23, jy - 126], [jx + 6, jy - 134]]);
+    const lines = [
+      { role: 'limbSkin', pts: [[jx - 7, jy - 44], [jx - 9, jy]], w: 8 }, { role: 'limbSkin', pts: [[jx + 7, jy - 44], [jx + 9, jy]], w: 8 },
+      { role: 'limbShirt', pts: [[jx - 14, jy - 90], [jx - 14 + Math.sin(armA) * 34, jy - 90 + Math.cos(armA) * 34]], w: 9 },
+      { role: 'limbShirt', pts: [[jx + 14, jy - 90], [jx + 14 - Math.sin(armA) * 34, jy - 90 + Math.cos(armA) * 34]], w: 9 },
+    ];
+    const eyes = [[jx - 7 + (look ? 3 : 0), jy - 122], [jx + 7 + (look ? 3 : 0), jy - 122]];
+    const mouthOpen = u > 2.9 && u < 4.8;
+    // peach
+    const peach = r > 0.5 ? { pts: peachPts(px, py, r), x: px, y: py, r } : null;
+    const stem = r > 0.5 ? (onGround < 0.95 ? [[bx, by], [px, py - r]] : null) : null;
+    const word = u > 3.0 && u < 4.9 ? { k: outBack(prog(u, 3.0, 3.35)), a: 1 - prog(u, 4.6, 4.9) } : null;
+    return { shapes, lines, eyes, mouthOpen, peach, stem, word, jx, jy };
+  }
+
+  // ---------- path helpers ----------
+  function smoothPath(ctx, pts, close = true) {
+    const n = pts.length; ctx.beginPath();
+    if (pts.sharp) { pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); if (close) ctx.closePath(); return; }
+    if (!close) { ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n; i++) ctx.lineTo(pts[i][0], pts[i][1]); return; }
+    const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    let m = mid(pts[n - 1], pts[0]); ctx.moveTo(m[0], m[1]);
+    for (let i = 0; i < n; i++) { const p = pts[i], q = mid(p, pts[(i + 1) % n]); ctx.quadraticCurveTo(p[0], p[1], q[0], q[1]); }
+    ctx.closePath();
+  }
+  const jitter = (pts, amt, seed, t, fps = 10) => { const f = Math.floor(t * fps); const out = pts.map(([x, y], i) => [x + nz(seed * 3.1 + i * 1.7 + f * 13.3) * amt, y + nz(seed * 5.3 + i * 2.3 + f * 7.9) * amt]); out.sharp = pts.sharp; return out; };
+  const bbox = pts => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; pts.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }); return { x0, y0, x1, y1 }; };
+  function hatch(ctx, pts, col, gap, angle, w, t, seed, alpha = 1, wobble = 1.5) {
+    const b = bbox(pts); ctx.save(); smoothPath(ctx, pts); ctx.clip();
+    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.globalAlpha *= alpha; ctx.lineCap = 'round';
+    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, R = Math.hypot(b.x1 - b.x0, b.y1 - b.y0) / 2 + 10;
+    const ca = Math.cos(angle), sa = Math.sin(angle), f = Math.floor(t * 10);
+    ctx.beginPath();
+    for (let d = -R, k = 0; d <= R; d += gap, k++) {
+      const ox = cx - sa * d, oy = cy + ca * d;
+      ctx.moveTo(ox - ca * R + nz(k + f + seed) * wobble, oy - sa * R + nz(k * 2 + f) * wobble);
+      ctx.lineTo(ox + ca * R + nz(k * 3 + f + seed) * wobble, oy + sa * R + nz(k * 5 + f) * wobble);
+    }
+    ctx.stroke(); ctx.restore();
+  }
+  let grainCanvas = null;
+  function grain(ctx, alpha, t, tint = [255, 250, 240]) {
+    if (!grainCanvas) { grainCanvas = document.createElement('canvas'); grainCanvas.width = 256; grainCanvas.height = 256; const g = grainCanvas.getContext('2d'), im = g.createImageData(256, 256), r = rng(4); for (let i = 0; i < im.data.length; i += 4) { const v = 185 + r() * 70; im.data[i] = v; im.data[i + 1] = v * 0.98; im.data[i + 2] = v * 0.93; im.data[i + 3] = 255; } g.putImageData(im, 0, 0); }
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = alpha;
+    const j = Math.floor(t * 8) % 4; ctx.translate(-j * 31, -j * 17); ctx.fillStyle = ctx.createPattern(grainCanvas, 'repeat'); ctx.fillRect(0, 0, W + 200, H + 200); ctx.restore();
+  }
+  function word(ctx, text, x, y, size, k, a, draw) { if (!k) return; ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y); ctx.rotate(-0.05); ctx.scale(k, k); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; draw(); ctx.restore(); }
+
+  // ---------- the styles ----------
+  const STYLES = [
+    {
+      id: 'paper', name: 'Cut paper', sub: 'pop-up storybook', fit: 'Strong fit',
+      feel: 'Layered paper shapes with soft cast shadows and grain. Warm, tactile, and it forgives stiff movement because paper puppets are supposed to move that way.',
+      refs: 'Eric Carle\'s collage picture books (The Very Hungry Caterpillar); Lotte Reiniger\'s cut-out films; the papercraft game Tearaway.',
+      best: 'Fairy tales, bedtime stories, anything cosy for ages 3 to 8.',
+      watch: 'Can feel samey across long videos unless each scene gets its own colour story.',
+      pal: { sky: ['#8CC8E8', '#FDE9C9'], hillFar: '#B6D48A', ground: '#86B35A', trunk: '#7A4E2E', leaf: ['#5E9B45', '#4E8A3A'], house: '#C9B79C', roof: '#7A5A5A', door: '#5A3E30', window: '#FFE39A', skin: '#F4C39C', hair: '#6A3B22', shirt: '#3F72B8', shorts: '#8A5A36', limbSkin: '#F4C39C', limbShirt: '#3F72B8', peach: ['#FFC08A', '#F7894F', '#E0573E'] },
+      draw(ctx, s, t) {
+        const P = this.pal;
+        const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, P.sky[0]); g.addColorStop(1, P.sky[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#FFE3A0'; ctx.beginPath(); ctx.arc(820, 110, 44, 0, 7); ctx.fill();
+        const fill = (pts, col, d = 1) => { ctx.save(); ctx.shadowColor = 'rgba(52,28,12,0.3)'; ctx.shadowBlur = 8 * d; ctx.shadowOffsetX = 2 * d; ctx.shadowOffsetY = 4 * d; smoothPath(ctx, pts); ctx.fillStyle = col; ctx.fill(); ctx.restore(); };
+        s.shapes.forEach(sh => { if (sh.role === 'leaf') fill(sh.pts, P.leaf[sh.idx % 2]); else fill(sh.pts, P[sh.role], sh.role === 'hillFar' ? 0.6 : 1); if (sh.head) drawFace(ctx, s, '#2B1E16'); });
+        s.lines.forEach(l => { ctx.strokeStyle = P[l.role]; ctx.lineWidth = l.w; ctx.lineCap = 'round'; smoothPath(ctx, l.pts, false); ctx.stroke(); });
+        if (s.stem) { ctx.strokeStyle = '#6B4428'; ctx.lineWidth = 4; smoothPath(ctx, s.stem, false); ctx.stroke(); }
+        if (s.peach) { const { x, y, r } = s.peach; const pg = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r * 1.3); P.peach.forEach((c, i) => pg.addColorStop(i / 2, c)); ctx.save(); ctx.shadowColor = 'rgba(52,28,12,0.32)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6; smoothPath(ctx, s.peach.pts); ctx.fillStyle = pg; ctx.fill(); ctx.restore(); crease(ctx, s.peach, 'rgba(160,60,40,0.45)'); }
+        grain(ctx, 0.22, t);
+        word(ctx, 'BIGGER!', 480, 90, 1, s.word && s.word.k, s.word && s.word.a, () => { ctx.font = `900 92px ${SERIF}`; ctx.lineJoin = 'round'; ctx.lineWidth = 12; ctx.strokeStyle = '#2B1E16'; ctx.strokeText('BIGGER!', 0, 0); ctx.fillStyle = '#F7894F'; ctx.fillText('BIGGER!', 0, 0); });
+      },
+    },
+    {
+      id: 'water', name: 'Ink and watercolour', sub: 'classic picture book', fit: 'Strong fit',
+      feel: 'Loose, slightly wobbly ink lines over soft washes that bleed and pool at the edges. Feels timeless and gentle, like a book from a grandparent\'s shelf.',
+      refs: 'Beatrix Potter\'s Peter Rabbit books; E. H. Shepard\'s Winnie-the-Pooh illustrations; the film Ernest & Celestine (2012).',
+      best: 'Classic tales, gentle and emotional stories, nature stories.',
+      watch: 'Fast action gets muddy. Suits calm pacing more than chases.',
+      pal: { hillFar: '#A9C98A', ground: '#8DBB6A', trunk: '#8A5A3A', leaf: ['#6FAE58', '#5E9B4C'], house: '#D8C8AE', roof: '#9A6A6A', door: '#6A4A38', window: '#F6E2A0', skin: '#F2C8A6', hair: '#7A4A2C', shirt: '#5A8AC8', shorts: '#A07050', limbSkin: '#F2C8A6', limbShirt: '#5A8AC8', peach: '#F59A68' },
+      draw(ctx, s, t) {
+        const P = this.pal;
+        ctx.fillStyle = '#FBF5E8'; ctx.fillRect(0, 0, W, H);
+        wash(ctx, circlePts(820, 110, 46, 18), '#F8D878', t, 50);
+        { const sk = [[-10, -10], [W + 10, -10], ...Array.from({ length: 13 }, (_, i) => [W + 10 - i * 82, 262 + Math.sin(i * 1.3) * 14])]; wash(ctx, sk, '#B8DAEE', t, 51, 0.35); }
+        const ink = (pts, seed, close = true) => { ctx.strokeStyle = 'rgba(58,40,30,0.85)'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; [0, 1].forEach(k => { smoothPath(ctx, jitter(pts, 1.6, seed + k * 7, t, 8), close); ctx.stroke(); }); };
+        s.shapes.forEach((sh, i) => { const col = sh.role === 'leaf' ? P.leaf[sh.idx % 2] : P[sh.role]; wash(ctx, sh.pts, col, t, i + 3); if (sh.role !== 'hillFar' && sh.role !== 'ground') ink(sh.pts, i + 3); if (sh.head) drawFace(ctx, s, '#3A2A20'); });
+        ink([[0, 300], ...s.shapes[1].pts.slice(1, 23)], 90, false);
+        s.lines.forEach((l, i) => { ctx.strokeStyle = P[l.role]; ctx.globalAlpha = 0.8; ctx.lineWidth = l.w; ctx.lineCap = 'round'; smoothPath(ctx, l.pts, false); ctx.stroke(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(58,40,30,0.8)'; ctx.lineWidth = 1.4; smoothPath(ctx, jitter(l.pts, 1.2, 40 + i, t), false); ctx.stroke(); });
+        if (s.stem) { ctx.strokeStyle = '#6B4428'; ctx.lineWidth = 3; smoothPath(ctx, jitter(s.stem, 1, 9, t), false); ctx.stroke(); }
+        if (s.peach) { wash(ctx, s.peach.pts, P.peach, t, 70, 0.75); wash(ctx, circlePts(s.peach.x + s.peach.r * 0.3, s.peach.y + s.peach.r * 0.2, s.peach.r * 0.55, 16), '#EE6A5E', t, 71, 0.35); ink(s.peach.pts, 72); crease(ctx, s.peach, 'rgba(120,50,30,0.6)', 1.4); }
+        grain(ctx, 0.14, t);
+        word(ctx, 'bigger!', 480, 88, 1, s.word && s.word.k, s.word && s.word.a, () => { ctx.font = `italic 700 86px ${SERIF}`; ctx.fillStyle = 'rgba(230,110,70,0.85)'; ctx.fillText('bigger!', 3, 3); ctx.strokeStyle = 'rgba(58,40,30,0.9)'; ctx.lineWidth = 1.6; ctx.strokeText('bigger!', 0, 0); });
+      },
+    },
+    {
+      id: 'crayon', name: 'Crayon and coloured pencil', sub: 'drawn by a child', fit: 'Strong fit',
+      feel: 'Scribbled waxy fills that never quite stay in the lines, bold wobbly outlines and a hand-lettered title. Instantly reads as "made for kids" and feels personal.',
+      refs: 'The Snowman (1982 film, from Raymond Briggs); Harold and the Purple Crayon; Lauren Child\'s Charlie and Lola.',
+      best: 'Young children, school projects, stories told "by" a child narrator.',
+      watch: 'Busy texture tires the eye over 5 minutes or more. Best under 3.',
+      pal: { hillFar: '#9FD06A', ground: '#6CBF4A', trunk: '#8A5A2A', leaf: ['#3FA83A', '#58C050'], house: '#F2A0C0', roof: '#E0453A', door: '#7A3AA8', window: '#FFD83A', skin: '#F7B98A', hair: '#8A4A1A', shirt: '#2F7FE0', shorts: '#E08A2A', limbSkin: '#F7B98A', limbShirt: '#2F7FE0', peach: '#FF8A3A' },
+      draw(ctx, s, t) {
+        const P = this.pal;
+        ctx.fillStyle = '#FFFDF6'; ctx.fillRect(0, 0, W, H);
+        hatch(ctx, [[0, 0], [W, 0], [W, 290], [0, 310]], '#7FC4F2', 7, -0.9, 3, t, 1, 0.55, 2.5);
+        hatch(ctx, circlePts(820, 110, 46, 18), '#FFD23A', 5, 0.7, 3.5, t, 2, 0.9);
+        const out = (pts, col, seed, close = true) => { ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalAlpha = 0.9; smoothPath(ctx, jitter(pts, 2.4, seed, t, 8), close); ctx.stroke(); ctx.globalAlpha = 1; };
+        s.shapes.forEach((sh, i) => { const col = sh.role === 'leaf' ? P.leaf[sh.idx % 2] : P[sh.role]; hatch(ctx, jitter(sh.pts, 3, i, t, 8), col, 5.5, 0.6 + (i % 3) * 0.5, 3.4, t, i, 0.95, 2.2); out(sh.pts, shade(col, 0.55), i); if (sh.head) drawFace(ctx, s, '#2A2A2A'); });
+        s.lines.forEach((l, i) => { ctx.strokeStyle = P[l.role]; ctx.lineWidth = l.w + 2; ctx.lineCap = 'round'; smoothPath(ctx, jitter(l.pts, 2, 30 + i, t, 8), false); ctx.stroke(); });
+        if (s.stem) { ctx.strokeStyle = '#6B3A1A'; ctx.lineWidth = 4; smoothPath(ctx, jitter(s.stem, 2, 9, t), false); ctx.stroke(); }
+        if (s.peach) { hatch(ctx, s.peach.pts, P.peach, 5, 0.8, 3.6, t, 70, 1, 2.4); hatch(ctx, circlePts(s.peach.x + s.peach.r * 0.35, s.peach.y + s.peach.r * 0.2, s.peach.r * 0.5, 14), '#F2506A', 6, -0.7, 3, t, 71, 0.7); out(s.peach.pts, '#C0501A', 72); }
+        word(ctx, 'BIGGER!', 480, 90, 1, s.word && s.word.k, s.word && s.word.a, () => {
+          ctx.font = `700 88px ${ROUND}`; const cols = ['#E0453A', '#FF8A3A', '#FFD23A', '#3FA83A', '#2F7FE0', '#7A3AA8', '#E0453A'];
+          let x = -ctx.measureText('BIGGER!').width / 2; [...'BIGGER!'].forEach((c, i) => { const w = ctx.measureText(c).width; ctx.save(); ctx.translate(x + w / 2, Math.sin(i * 1.7 + Math.floor(t * 8)) * 4); ctx.rotate(nz(i * 3 + Math.floor(t * 8)) * 0.12); ctx.fillStyle = cols[i]; ctx.fillText(c, 0, 0); ctx.restore(); x += w; });
+        });
+      },
+    },
+    {
+      id: 'silhouette', name: 'Silhouette and shadow puppet', sub: 'dramatic, cinematic', fit: 'Strong fit',
+      feel: 'Everything in solid black against glowing sunset skies, with one colourful hero object. Dramatic and elegant, and it makes simple shapes look deliberate and artistic.',
+      refs: 'Lotte Reiniger\'s The Adventures of Prince Achmed (1926); "The Tale of the Three Brothers" in Harry Potter and the Deathly Hallows, Part 1.',
+      best: 'Myths, legends, spooky or emotional stories, older kids and adults.',
+      watch: 'Faces and expressions disappear. Emotion has to come from poses and colour.',
+      draw(ctx, s, t) {
+        const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#3A2A6A'); g.addColorStop(0.55, '#E86A4A'); g.addColorStop(0.8, '#FBC46A'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(255,230,160,0.9)'; ctx.beginPath(); ctx.arc(700, 300, 90, 0, 7); ctx.fill();
+        const r = rng(3); ctx.fillStyle = '#FFF4D8'; for (let i = 0; i < 40; i++) { ctx.globalAlpha = 0.4 + 0.4 * Math.sin(t * 2 + i); ctx.fillRect(r() * W, r() * 180, 2, 2); } ctx.globalAlpha = 1;
+        s.shapes.forEach(sh => { smoothPath(ctx, sh.pts); ctx.fillStyle = sh.role === 'hillFar' ? '#3A1E30' : sh.role === 'window' ? '#FFD36A' : '#140C12'; ctx.fill(); });
+        s.lines.forEach(l => { ctx.strokeStyle = '#140C12'; ctx.lineWidth = l.w; ctx.lineCap = 'round'; smoothPath(ctx, l.pts, false); ctx.stroke(); });
+        // eye glint so James still reads
+        s.eyes.forEach(([x, y]) => { ctx.fillStyle = '#FFE39A'; ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 7); ctx.fill(); });
+        if (s.stem) { ctx.strokeStyle = '#140C12'; ctx.lineWidth = 4; smoothPath(ctx, s.stem, false); ctx.stroke(); }
+        if (s.peach) { const { x, y, r } = s.peach; const gl = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 2.4); gl.addColorStop(0, 'rgba(255,170,90,0.55)'); gl.addColorStop(1, 'rgba(255,170,90,0)'); ctx.fillStyle = gl; ctx.fillRect(x - r * 2.5, y - r * 2.5, r * 5, r * 5); const pg = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * 1.2); pg.addColorStop(0, '#FFD29A'); pg.addColorStop(1, '#F06A3A'); smoothPath(ctx, s.peach.pts); ctx.fillStyle = pg; ctx.fill(); }
+        word(ctx, 'B I G G E R', 480, 86, 1, s.word && s.word.k, s.word && s.word.a, () => { ctx.font = `500 64px ${SERIF}`; ctx.fillStyle = '#FFF1D8'; ctx.fillText('B I G G E R', 0, 0); });
+      },
+    },
+    {
+      id: 'flat', name: 'Flat geometric', sub: 'modern explainer', fit: 'Strong fit',
+      feel: 'Crisp shapes, bold saturated colour, simple shading with a darker half, no outlines. Clean, confident and very readable on a phone.',
+      refs: 'Kurzgesagt\'s science videos; Hey Duggee; Mary Blair\'s Disney concept art (It\'s a Small World).',
+      best: 'Science and "how it works" stories, little labs content, fast-paced social videos.',
+      watch: 'Can feel corporate. Needs a characterful palette to stay warm.',
+      pal: { sky: '#2E3A8C', hillFar: '#3F9E8C', ground: '#2FBF71', trunk: '#8C4A2F', leaf: ['#1F9E5A', '#2FBF71'], house: '#F2E6D0', roof: '#E0453A', door: '#2E3A8C', window: '#FFC83A', skin: '#FFC09A', hair: '#3A2A1A', shirt: '#FF5A5F', shorts: '#2E3A8C', limbSkin: '#FFC09A', limbShirt: '#FF5A5F', peach: '#FF8A4A' },
+      draw(ctx, s, t) {
+        const P = this.pal;
+        ctx.fillStyle = P.sky; ctx.fillRect(0, 0, W, H);
+        [[160, 90, 3], [420, 60, 2], [620, 120, 2.5], [880, 70, 2]].forEach(([x, y, r]) => { ctx.fillStyle = '#FFFFFF'; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 2 + x); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }); ctx.globalAlpha = 1;
+        ctx.fillStyle = '#FFE08A'; ctx.beginPath(); ctx.arc(820, 110, 44, 0, 7); ctx.fill(); ctx.fillStyle = '#FFC83A'; ctx.beginPath(); ctx.arc(820, 110, 44, -Math.PI / 2, Math.PI / 2); ctx.fill();
+        s.shapes.forEach(sh => { const col = sh.role === 'leaf' ? P.leaf[sh.idx % 2] : P[sh.role]; ctx.beginPath(); sh.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); if (sh.role === 'leaf' || sh.role === 'house') { ctx.save(); ctx.clip(); const b = bbox(sh.pts); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect((b.x0 + b.x1) / 2, b.y0, b.x1, b.y1 - b.y0); ctx.restore(); } if (sh.head) drawFace(ctx, s, '#1A1A2A'); });
+        s.lines.forEach(l => { ctx.strokeStyle = P[l.role]; ctx.lineWidth = l.w; ctx.lineCap = 'round'; ctx.beginPath(); l.pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); });
+        if (s.stem) { ctx.strokeStyle = '#6B3A1A'; ctx.lineWidth = 4; smoothPath(ctx, s.stem, false); ctx.stroke(); }
+        if (s.peach) { smoothPath(ctx, s.peach.pts); ctx.fillStyle = P.peach; ctx.fill(); ctx.save(); ctx.clip(); ctx.fillStyle = '#F2603A'; ctx.beginPath(); ctx.arc(s.peach.x + s.peach.r * 0.9, s.peach.y, s.peach.r * 1.1, 0, 7); ctx.fill(); ctx.restore(); }
+        word(ctx, 'BIGGER!', 480, 90, 1, s.word && s.word.k, s.word && s.word.a, () => { ctx.font = `700 90px ${ROUND}`; ctx.fillStyle = '#1A1A4A'; ctx.fillText('BIGGER!', 6, 6); ctx.fillStyle = '#FFFFFF'; ctx.fillText('BIGGER!', 0, 0); });
+      },
+    },
+    {
+      id: 'folk', name: 'Folk art with pattern', sub: 'illuminated fairy tale', fit: 'Good fit',
+      feel: 'Bold ink outlines, flat colour and hand-made patterns inside every shape: spiral suns, dotted hills, veined leaves. Magical and ornate, like an old storybook come alive.',
+      refs: 'Cartoon Saloon\'s films The Secret of Kells, Song of the Sea and Wolfwalkers; Scandinavian and Eastern European folk illustration.',
+      best: 'Myths, magical stories, anything with forests, creatures and spells.',
+      watch: 'The patterns take the longest to build, so a video in this style takes more time than the others.',
+      pal: { hillFar: '#3F7A5A', ground: '#5E9B45', trunk: '#6A3E24', leaf: ['#2F6E4A', '#3F8A56'], house: '#E8D2A8', roof: '#B03A2E', door: '#2A3A5A', window: '#F2C14B', skin: '#F2C8A0', hair: '#5A2E1A', shirt: '#2A5A8A', shorts: '#B03A2E', limbSkin: '#F2C8A0', limbShirt: '#2A5A8A', peach: '#F28A4A' },
+      draw(ctx, s, t) {
+        const P = this.pal;
+        const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#1F3A5A'); g.addColorStop(1, '#6A9AB0'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        // spiral sun
+        ctx.fillStyle = '#F2C14B'; ctx.beginPath(); ctx.arc(820, 110, 46, 0, 7); ctx.fill();
+        ctx.strokeStyle = '#B06A1A'; ctx.lineWidth = 3; ctx.beginPath(); for (let a = 0; a < 18; a += 0.2) { const rr = a * 2.3; ctx.lineTo(820 + Math.cos(a + t) * rr, 110 + Math.sin(a + t) * rr); } ctx.stroke();
+        for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2 + t * 0.3; ctx.beginPath(); ctx.moveTo(820 + Math.cos(a) * 54, 110 + Math.sin(a) * 54); ctx.lineTo(820 + Math.cos(a) * 72, 110 + Math.sin(a) * 72); ctx.strokeStyle = '#F2C14B'; ctx.lineWidth = 4; ctx.stroke(); }
+        s.shapes.forEach((sh, i) => {
+          const col = sh.role === 'leaf' ? P.leaf[sh.idx % 2] : P[sh.role];
+          smoothPath(ctx, sh.pts); ctx.fillStyle = col; ctx.fill();
+          ctx.save(); ctx.clip(); const b = bbox(sh.pts);
+          if (sh.role === 'hillFar' || sh.role === 'ground') { ctx.fillStyle = 'rgba(255,240,200,0.25)'; for (let y = b.y0 + 20; y < b.y1; y += 22) for (let x = b.x0 + ((y / 22) % 2) * 11; x < b.x1; x += 22) { ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 7); ctx.fill(); } }
+          if (sh.role === 'leaf') { ctx.strokeStyle = 'rgba(200,230,160,0.5)'; ctx.lineWidth = 2; const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2; for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(cx, cy + 30); ctx.quadraticCurveTo(cx + k * 10, cy, cx + k * 14, cy - 30); ctx.stroke(); } }
+          if (sh.role === 'roof') { ctx.strokeStyle = 'rgba(255,220,180,0.4)'; ctx.lineWidth = 2; for (let y = b.y0 + 12; y < b.y1; y += 12) { ctx.beginPath(); for (let x = b.x0; x < b.x1; x += 12) ctx.arc(x + 6, y, 6, 0, Math.PI); ctx.stroke(); } }
+          ctx.restore();
+          smoothPath(ctx, sh.pts); ctx.strokeStyle = '#1A140E'; ctx.lineWidth = sh.role === 'hillFar' ? 2 : 3.2; ctx.stroke();
+          if (sh.head) drawFace(ctx, s, '#1A140E');
+        });
+        s.lines.forEach(l => { ctx.strokeStyle = '#1A140E'; ctx.lineWidth = l.w + 4; ctx.lineCap = 'round'; smoothPath(ctx, l.pts, false); ctx.stroke(); ctx.strokeStyle = P[l.role]; ctx.lineWidth = l.w - 1; ctx.stroke(); });
+        if (s.stem) { ctx.strokeStyle = '#1A140E'; ctx.lineWidth = 4; smoothPath(ctx, s.stem, false); ctx.stroke(); }
+        if (s.peach) { smoothPath(ctx, s.peach.pts); ctx.fillStyle = P.peach; ctx.fill(); ctx.save(); ctx.clip(); ctx.strokeStyle = 'rgba(255,220,160,0.5)'; ctx.lineWidth = 2.5; for (let k = 1; k < 6; k++) { ctx.beginPath(); ctx.arc(s.peach.x, s.peach.y, s.peach.r * k / 6, -2.5, -0.6); ctx.stroke(); } ctx.restore(); smoothPath(ctx, s.peach.pts); ctx.strokeStyle = '#1A140E'; ctx.lineWidth = 3.2; ctx.stroke(); crease(ctx, s.peach, '#1A140E', 2.4); }
+        word(ctx, 'Bigger!', 480, 88, 1, s.word && s.word.k, s.word && s.word.a, () => { ctx.font = `italic 800 86px ${SERIF}`; ctx.lineWidth = 8; ctx.strokeStyle = '#1A140E'; ctx.strokeText('Bigger!', 0, 0); ctx.fillStyle = '#F2C14B'; ctx.fillText('Bigger!', 0, 0); });
+      },
+    },
+    {
+      id: 'riso', name: 'Retro print', sub: 'risograph, two or three inks', fit: 'Good fit',
+      feel: 'A strict palette of a few inks that overprint each other, slightly out of register, with grain and halftone dots. Stylish and grown-up, like an indie picture book or a gig poster.',
+      refs: 'Jon Klassen\'s books (I Want My Hat Back); Oliver Jeffers\' picture books; the Netflix series Hilda, from Luke Pearson\'s comics.',
+      best: 'Quirky or funny stories, older kids, adults, podcasts and brand work.',
+      watch: 'The limited palette makes some scenes hard to read, so each needs careful composition.',
+      draw(ctx, s, t) {
+        const INK = { pink: 'rgba(255,72,150,0.85)', blue: 'rgba(0,120,191,0.85)', yellow: 'rgba(255,214,0,0.9)' };
+        const map = { hillFar: ['blue', 0.45], ground: ['blue', 0.8], trunk: ['pink', 1], leaf: ['blue', 1], house: ['yellow', 0.9], roof: ['pink', 1], door: ['blue', 1], window: ['yellow', 1], skin: ['yellow', 0.6], hair: ['pink', 1], shirt: ['blue', 1], shorts: ['pink', 1] };
+        ctx.fillStyle = '#F6EFE2'; ctx.fillRect(0, 0, W, H);
+        const off = { pink: [2, 1], blue: [-2, 0], yellow: [0, 2] };
+        const f = Math.floor(t * 6) % 3, jig = [[0, 0], [1, -1], [-1, 1]][f];
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = INK.yellow; ctx.beginPath(); ctx.arc(820, 110, 44, 0, 7); ctx.fill();
+        s.shapes.forEach(sh => {
+          const [ink, a] = map[sh.role] || ['blue', 1];
+          ctx.save(); ctx.translate(off[ink][0] + jig[0], off[ink][1] + jig[1]); ctx.globalAlpha = a;
+          smoothPath(ctx, sh.pts); ctx.fillStyle = INK[ink]; ctx.fill();
+          if (sh.role === 'leaf' && sh.idx % 2) { ctx.globalAlpha = 0.9; ctx.fillStyle = INK.yellow; ctx.fill(); }
+          ctx.restore();
+        });
+        s.lines.forEach(l => { const ink = l.role === 'limbShirt' ? 'blue' : 'yellow'; ctx.strokeStyle = INK[ink]; ctx.lineWidth = l.w; ctx.lineCap = 'round'; smoothPath(ctx, l.pts, false); ctx.stroke(); });
+        if (s.stem) { ctx.strokeStyle = INK.pink; ctx.lineWidth = 4; smoothPath(ctx, s.stem, false); ctx.stroke(); }
+        if (s.peach) { ctx.save(); ctx.translate(2 + jig[0], 1); smoothPath(ctx, s.peach.pts); ctx.fillStyle = INK.pink; ctx.fill(); ctx.restore(); ctx.save(); ctx.translate(-1, 2 + jig[1]); smoothPath(ctx, s.peach.pts); ctx.fillStyle = INK.yellow; ctx.fill(); ctx.restore(); }
+        // halftone shading
+        ctx.fillStyle = 'rgba(0,120,191,0.35)'; for (let y = 440; y < H; y += 9) for (let x = (y % 18 ? 0 : 4.5); x < W; x += 9) { ctx.beginPath(); ctx.arc(x, y, 1.2 + (y - 440) / 60, 0, 7); ctx.fill(); }
+        ctx.globalCompositeOperation = 'source-over';
+        s.eyes.forEach(([x, y]) => { ctx.fillStyle = '#1A1A3A'; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill(); });
+        grain(ctx, 0.28, t);
+        word(ctx, 'BIGGER!', 480, 90, 1, s.word && s.word.k, s.word && s.word.a, () => { ctx.font = `900 90px ${SERIF}`; ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = INK.pink; ctx.fillText('BIGGER!', 3, 2); ctx.fillStyle = INK.blue; ctx.fillText('BIGGER!', -2, 0); });
+      },
+    },
+    {
+      id: 'pencil', name: 'Pencil sketch', sub: 'storyboard with one colour', fit: 'Good fit',
+      feel: 'Loose graphite lines drawn two or three times over, shading by cross-hatching, and colour only on the thing that matters. Feels like peeking into an artist\'s sketchbook.',
+      refs: 'Disney and Pixar story-reel sketches; Jean-Jacques Sempé\'s drawings for Le Petit Nicolas; the pencil look of The Snowman.',
+      best: 'Personal and nostalgic stories, "behind the scenes" pieces, grown-up audiences.',
+      watch: 'Reads as unfinished to some viewers. Works best when the single colour is used boldly.',
+      draw(ctx, s, t) {
+        ctx.fillStyle = '#FAF7F0'; ctx.fillRect(0, 0, W, H);
+        const g = 'rgba(70,70,80,0.75)';
+        const sketch = (pts, seed, close = true, w = 1.3) => { ctx.strokeStyle = g; ctx.lineWidth = w; ctx.lineJoin = 'round'; for (let k = 0; k < 3; k++) { smoothPath(ctx, jitter(pts, 2.2, seed + k * 11, t, 8), close); ctx.stroke(); } };
+        sketch(circlePts(820, 110, 44, 18), 1);
+        const dark = { trunk: 5, roof: 5, door: 4, hair: 5, shorts: 6, hillFar: 12, ground: 9, leaf: 8, shirt: 7 };
+        s.shapes.forEach((sh, i) => { if (dark[sh.role]) hatch(ctx, sh.pts, 'rgba(90,90,100,0.5)', dark[sh.role], sh.role === 'ground' ? 0.2 : 0.8, 1, t, i, 1, 1.2); if (sh.role === 'shirt' || sh.role === 'door') hatch(ctx, sh.pts, 'rgba(90,90,100,0.4)', 7, -0.8, 1, t, i + 50); sketch(sh.pts, i + 3, true, sh.role === 'hillFar' ? 0.8 : 1.3); if (sh.head) drawFace(ctx, s, '#3A3A44'); });
+        s.lines.forEach((l, i) => { ctx.strokeStyle = g; ctx.lineWidth = 1.3; for (let k = 0; k < 2; k++) { const off = l.w / 2; smoothPath(ctx, jitter(l.pts.map(([x, y]) => [x - off, y]), 1.2, i * 7 + k, t), false); ctx.stroke(); smoothPath(ctx, jitter(l.pts.map(([x, y]) => [x + off, y]), 1.2, i * 9 + k, t), false); ctx.stroke(); } });
+        if (s.stem) sketch(s.stem, 9, false);
+        if (s.peach) { hatch(ctx, s.peach.pts, 'rgba(247,120,60,0.85)', 4, 0.8, 2.2, t, 70, 1, 1.5); hatch(ctx, s.peach.pts, 'rgba(230,80,70,0.5)', 6, -0.7, 2, t, 71, 1, 1.5); sketch(s.peach.pts, 72, true, 1.5); }
+        grain(ctx, 0.1, t);
+        word(ctx, 'bigger!', 480, 88, 1, s.word && s.word.k, s.word && s.word.a, () => { ctx.font = `italic 600 80px ${SERIF}`; ctx.fillStyle = 'rgba(247,120,60,0.9)'; ctx.fillText('bigger!', 0, 0); ctx.strokeStyle = 'rgba(70,70,80,0.7)'; ctx.lineWidth = 1.2; ctx.strokeText('bigger!', 0, 0); });
+      },
+    },
+  ];
+
+  // ---------- shared small helpers ----------
+  function drawFace(ctx, s, col) {
+    s.eyes.forEach(([x, y]) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fill(); });
+    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+    if (s.mouthOpen) { ctx.ellipse(s.jx + 3, s.jy - 108, 3.5, 5, 0, 0, 7); ctx.fillStyle = col; ctx.fill(); }
+    else { ctx.arc(s.jx + 2, s.jy - 112, 6, 0.3, Math.PI - 0.3); ctx.stroke(); }
+  }
+  function crease(ctx, p, col, w = 2) { const { x, y, r } = p; ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y - r * 0.86); ctx.bezierCurveTo(x + r * 0.22, y - r * 0.35, x + r * 0.2, y + r * 0.3, x + r * 0.02, y + r * 0.9); ctx.stroke(); }
+  function shade(hex, k) { const n = parseInt(hex.slice(1), 16); return `rgb(${Math.round((n >> 16 & 255) * k)},${Math.round((n >> 8 & 255) * k)},${Math.round((n & 255) * k)})`; }
+  function wash(ctx, pts, col, t, seed, alpha = 0.6) {
+    ctx.save(); ctx.globalAlpha = alpha * 0.45;
+    for (let k = 0; k < 3; k++) { smoothPath(ctx, jitter(pts, 3.5, seed * 7 + k * 13, t, 4)); ctx.fillStyle = col; ctx.fill(); }
+    ctx.globalAlpha = alpha * 0.5; ctx.strokeStyle = shade(col, 0.8); ctx.lineWidth = 3; smoothPath(ctx, jitter(pts, 2.5, seed * 3, t, 4)); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ---------- page ----------
+  const grid = document.getElementById('grid');
+  const cards = STYLES.map(st => {
+    const card = document.createElement('article'); card.className = 'card';
+    card.innerHTML = `<canvas width="${W}" height="${H}" aria-label="${st.name} sample of the Giant Peach scene"></canvas>
+      <div class="body">
+        <div class="top"><h2>${st.name}<span>${st.sub}</span></h2><span class="fit${st.fit === 'Good fit' ? ' mid' : ''}">${st.fit}</span></div>
+        <p class="feel">${st.feel}</p>
+        <dl><dt>References</dt><dd>${st.refs}</dd><dt>Best for</dt><dd>${st.best}</dd><dt>Watch out for</dt><dd>${st.watch}</dd></dl>
+      </div>`;
+    grid.appendChild(card);
+    return { st, cv: card.querySelector('canvas'), visible: true };
+  });
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { const c = cards.find(c => c.cv === e.target); if (c) c.visible = e.isIntersecting; }), { rootMargin: '200px' }) : null;
+  cards.forEach(c => io && io.observe(c.cv));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function renderAll(t, force) { cards.forEach(c => { if (!force && !c.visible) return; const ctx = c.cv.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; c.st.draw(ctx, sceneAt(t), t); }); }
+  window.renderStyles = t => renderAll(t, true);
+  let last = 0;
+  function loop(now) { if (now - last > 40) { last = now; renderAll(now / 1000); } requestAnimationFrame(loop); }
+  Promise.all([document.fonts.load(`900 40px ${SERIF}`), document.fonts.load(`italic 700 40px ${SERIF}`), document.fonts.load(`700 40px ${ROUND}`)]).catch(() => {}).then(() => {
+    window.stylesReady = true;
+    if (reduce) renderAll(3.6, true); else requestAnimationFrame(loop);
+  });
+  renderAll(3.6, true);
+})();
+</script>
