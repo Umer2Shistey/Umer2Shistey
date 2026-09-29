@@ -1,0 +1,30 @@
+<style>
+@font-face { font-family: "Fraunces Local"; src: url("assets/fraunces-normal.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Fredoka Local"; src: url("assets/fredoka.woff2") format("woff2"); font-weight: 500 700; }
+body { margin: 0; background: #000; }
+</style>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="engine.js"></script>
+<script>
+const { ctx, C, sky, james, spiker, sponge, oldMan, kid, grasshopper, ladybird, spider, earthworm, centipede, gull, fin, peach, tree, hill, cloud, empireState, finish, txt, FONT_SERIF } = PE;
+window.renderAt = t => {
+  ctx.setTransform(1,0,0,1,0,0);
+  sky([[0, C.sky1], [1, C.sky3]]);
+  cloud(300, 150, 1); cloud(1500, 120, 0.8);
+  hill(900, 40, 0.004, 0, C.grass2, 1, -400, 2320, 2, t);
+  tree(1780, 900, 0.8, t);
+  james(140, 880, 1, t, { mood: 'happy', armL: 2.6 });
+  james(300, 880, 1, t, { mood: 'sad', walk: t * 6 });
+  spiker(480, 880, 0.9, t); sponge(640, 880, 0.9, t);
+  oldMan(820, 880, 1, t, { arm: 1.2 });
+  kid(960, 880, 1, t, 3);
+  grasshopper(1120, 880, 0.9, t); ladybird(1330, 880, 0.9, t); spider(1520, 880, 0.8, t);
+  earthworm(1300, 560, 0.8, t); centipede(1700, 560, 0.8, t, { chew: 1 });
+  peach(700, 420, 170, t, { hole: 1 });
+  gull(1000, 200, 1.2, t); fin(1100, 560, 1);
+  empireState(200, 700, 0.5);
+  txt('James and the Giant Peach', 1000, 70, 64, C.ink, FONT_SERIF, 800);
+  finish(t);
+};
+Promise.all([document.fonts.load('800 40px "Fraunces Local"')]).then(() => { window.reelDuration = 1; window.reelReady = true; renderAt(0.3); });
+</script>
