@@ -1,0 +1,910 @@
+<title>Little Labs Reel</title>
+<style>
+@font-face { font-family: "Fredoka Local"; src: url("assets/fredoka.woff2") format("woff2"); font-weight: 500 700; font-display: block; }
+/* Layout: a 9:16 phone-shaped stage beside a control column; stacks on narrow screens. Brand look: little labs lime, ink and pink, committed single theme. */
+:root {
+  --lime: #D1FF42;
+  --ink: #0C1014;
+  --pink: #FF6FB1;
+  --paper: #F7FFE8;
+  --panel: #161B21;
+  --line: #2A323B;
+  --muted: #9AA6B2;
+  --round: "Fredoka Local", "Arial Rounded MT Bold", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { background: var(--ink); color: var(--paper); }
+body { font-family: var(--round); padding-inline: 16px; padding-block: 24px 40px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 22px; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+#big { position: absolute; inset: 0; margin: auto; width: 96px; height: 96px; border-radius: 50%; border: 0; background: var(--ink); color: var(--lime); font-size: 36px; cursor: pointer; box-shadow: 0 0 0 6px var(--lime); }
+.side { display: grid; gap: 14px; min-width: 0; }
+h1 { margin: 0; font-weight: 700; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.1; text-wrap: balance; }
+h1 span { color: var(--lime); }
+.meta { color: var(--muted); font-size: 15px; font-weight: 500; line-height: 1.5; margin: 0; }
+.transport { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+button { font: 600 15px var(--round); color: var(--paper); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+button:hover { border-color: var(--lime); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+#scrub { width: 100%; min-width: 0; accent-color: var(--lime); grid-column: 1 / -1; }
+#tc { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+.scenes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.scenes button { border-radius: 10px; text-align: left; display: grid; gap: 2px; font-weight: 500; }
+.scenes button b { font-weight: 600; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.scenes button.on { border-color: var(--lime); }
+.scenes button.on b { color: var(--lime); }
+label.safe { display: flex; align-items: center; gap: 10px; color: var(--paper); font-weight: 500; cursor: pointer; }
+label.safe input { width: 20px; height: 20px; accent-color: var(--lime); }
+@media (max-width: 760px) { .wrap { grid-template-columns: minmax(0, 1fr); } .stage { max-width: 420px; margin: 0 auto; } }
+</style>
+
+<div class="wrap">
+  <div class="stage">
+    <canvas id="c" width="1080" height="1920" aria-label="Instagram Reel: make STEM books for kids and earn volunteer hours"></canvas>
+    <button id="big" type="button" aria-label="Play with sound">▶</button>
+  </div>
+  <div class="side">
+    <h1>little labs<span>.</span> reel</h1>
+    <p class="meta">25.5 s / 1080×1920 / 30 fps / synced to the voiceover. Everything important sits inside Instagram's safe area, clear of the header, the caption and the like and share buttons.</p>
+    <div class="transport">
+      <button id="play" type="button">Play</button>
+      <button id="restart" type="button">Restart</button>
+      <div id="tc">0:00.0</div>
+      <input id="scrub" type="range" min="0" max="25.5" step="0.001" value="0" aria-label="Scrub timeline">
+    </div>
+    <label class="safe"><input id="safe" type="checkbox"> Show Instagram UI overlay</label>
+    <div class="scenes" id="scenes"></div>
+  </div>
+</div>
+<audio id="aud" src="assets/littlelabs-promo-audio.mp3" preload="auto"></audio>
+
+<script>
+(() => {
+  const W = 1080, H = 1920, D = 25.5;
+  const K = { lime: '#D1FF42', ink: '#0C1014', pink: '#FF6FB1', paper: '#F7FFE8', white: '#FFFFFF', green: '#35B24A', leaf: '#4CAF50', canvaDark: '#1D1F26' };
+  const FONT = '"Fredoka Local", "Arial Rounded MT Bold", system-ui, sans-serif';
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+
+  // Voiceover phrase and word times (seconds), measured from the audio.
+  const P = {
+    want: 0.11, easy: 0.54, way: 0.84, hours1: 1.55, home: 2.68,
+    trick: 3.87, trickW: 4.29, make: 5.09, stem: 5.53, kids: 6.25,
+    step1: 7.27, canva: 8.14, find: 9.13, childrens: 9.68,
+    step2: 11.25, write: 13.66, teach: 14.79, science: 16.42,
+    step3: 17.55, link: 18.55, submit: 19.66, getHours: 21.12, hoursW: 21.82, gasp: 22.47,
+  };
+  const CAPS = [
+    [3.87, 5.0, "Here's the trick.", ['trick.']],
+    [5.09, 7.05, 'Make STEM books for kids!', ['STEM']],
+    [7.27, 8.05, 'Step one...', ['one...']],
+    [8.14, 11.0, "go on Canva and find a children's book template.", ['Canva']],
+    [11.25, 12.1, 'Step two...', ['two...']],
+    [12.2, 13.6, 'make it YOURS.', ['YOURS.']],
+    [13.66, 14.76, 'Write your own story,', ['story,']],
+    [14.79, 17.3, 'and teach kids something cool about science!', ['science!']],
+    [17.55, 18.45, 'Step three...', ['three...']],
+    [18.55, 19.62, 'click the link in my bio,', ['link', 'bio,']],
+    [19.66, 21.05, 'submit your story...', ['submit']],
+    [21.12, 22.75, 'and get your hours!', ['hours!']],
+  ];
+
+  // ---------- math ----------
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const E = {
+    outExpo: t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t),
+    inExpo: t => t <= 0 ? 0 : Math.pow(2, 10 * t - 10),
+    inOutExpo: t => t <= 0 ? 0 : t >= 1 ? 1 : t < .5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2,
+    inOutCubic: t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+    outCubic: t => 1 - Math.pow(1 - t, 3),
+    inCubic: t => t * t * t,
+    outBack: t => { const c = 1.9; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); },
+    inBack: t => { if (t >= 1) return 1; const c = 1.70158; return (c + 1) * t * t * t - c * t * t; },
+  };
+  const pop = (t, t0, d = 0.45) => E.outBack(prog(t, t0, t0 + d));
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+  // ---------- drawing helpers ----------
+  const font = (px, w = 700) => `${w} ${px}px ${FONT}`;
+  function withT(x, y, s, r, fn) { ctx.save(); ctx.translate(x, y); if (r) ctx.rotate(r); if (s !== 1) ctx.scale(s, s); fn(); ctx.restore(); }
+  function txt(str, x, y, px, col, w = 700, align = 'center', base = 'middle') { ctx.font = font(px, w); ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = base; ctx.fillText(str, x, y); }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function bg(c) { ctx.fillStyle = c; ctx.fillRect(-100, -100, W + 200, H + 200); }
+  function dots(t, col, a) {
+    ctx.fillStyle = col; ctx.globalAlpha = a;
+    const off = (t * 14) % 60;
+    for (let y = -60; y < H + 60; y += 60) for (let x = -60; x < W + 60; x += 60) { ctx.beginPath(); ctx.arc(x + off, y + off * 0.5, 3, 0, 7); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+  function drawPath(pts, p) {
+    let L = 0; const seg = [];
+    for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); L += d; }
+    let left = L * p; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length && left > 0; i++) {
+      const f = Math.min(1, left / seg[i - 1]);
+      ctx.lineTo(lerp(pts[i - 1][0], pts[i][0], f), lerp(pts[i - 1][1], pts[i][1], f)); left -= seg[i - 1];
+    }
+    ctx.stroke();
+  }
+  function pill(x, y, w, h, fill, shadow = 10, stroke = 5) {
+    if (shadow) { ctx.fillStyle = K.ink; rr(x + shadow, y + shadow, w, h, h / 2); ctx.fill(); }
+    ctx.fillStyle = fill; rr(x, y, w, h, h / 2); ctx.fill();
+    if (stroke) { ctx.strokeStyle = K.ink; ctx.lineWidth = stroke; ctx.stroke(); }
+  }
+
+  // ---------- icons ----------
+  function clockIcon(x, y, r, t, spin) {
+    ctx.fillStyle = K.white; ctx.strokeStyle = K.ink; ctx.lineWidth = r * 0.09;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; const r0 = i % 3 ? r * 0.8 : r * 0.7; ctx.lineWidth = r * 0.05; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0); ctx.lineTo(x + Math.cos(a) * r * 0.86, y + Math.sin(a) * r * 0.86); ctx.stroke(); }
+    const m = -Math.PI / 2 + t * spin, h = -Math.PI / 2 + t * spin / 12;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = r * 0.09; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(h) * r * 0.45, y + Math.sin(h) * r * 0.45); ctx.stroke();
+    ctx.strokeStyle = K.pink; ctx.lineWidth = r * 0.06; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(m) * r * 0.68, y + Math.sin(m) * r * 0.68); ctx.stroke();
+    ctx.lineCap = 'butt'; ctx.fillStyle = K.ink; ctx.beginPath(); ctx.arc(x, y, r * 0.08, 0, 7); ctx.fill();
+  }
+  function flaskIcon(x, y, s, t) {
+    withT(x, y, s, 0, () => {
+      ctx.lineJoin = 'round'; ctx.strokeStyle = K.ink; ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(-14, -42); ctx.lineTo(-14, -10); ctx.lineTo(-40, 38); ctx.quadraticCurveTo(-44, 46, -34, 46); ctx.lineTo(34, 46); ctx.quadraticCurveTo(44, 46, 40, 38); ctx.lineTo(14, -10); ctx.lineTo(14, -42); ctx.closePath();
+      ctx.fillStyle = K.white; ctx.fill(); ctx.save(); ctx.clip();
+      ctx.fillStyle = K.pink; ctx.fillRect(-50, 12 + Math.sin(t * 5) * 3, 100, 40); ctx.restore(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-22, -42); ctx.lineTo(22, -42); ctx.stroke();
+      ctx.fillStyle = K.ink; [[-8, 26, 5], [10, 32, 4], [2, -((t * 40) % 60), 4]].forEach(([bx, by, br]) => { ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fill(); });
+    });
+  }
+  function gearIcon(x, y, s, rot) {
+    withT(x, y, s, rot, () => {
+      ctx.fillStyle = K.ink; ctx.beginPath();
+      for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, r = i % 2 ? 36 : 48; const a2 = a + Math.PI / 16; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); ctx.lineTo(Math.cos(a2) * r, Math.sin(a2) * r); }
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = K.lime; ctx.beginPath(); ctx.arc(0, 0, 15, 0, 7); ctx.fill();
+    });
+  }
+  function laptopIcon(x, y, s, t) {
+    withT(x, y, s, 0, () => {
+      ctx.fillStyle = K.ink; rr(-44, -38, 88, 60, 8); ctx.fill();
+      ctx.fillStyle = K.white; rr(-36, -30, 72, 44, 4); ctx.fill();
+      ctx.fillStyle = K.pink; const n = Math.floor(t * 6) % 3;
+      for (let i = 0; i < 3; i++) ctx.fillRect(-28, -22 + i * 12, i === n ? 44 : 30, 6);
+      ctx.fillStyle = K.ink; ctx.beginPath(); ctx.moveTo(-54, 28); ctx.lineTo(54, 28); ctx.lineTo(46, 40); ctx.lineTo(-46, 40); ctx.closePath(); ctx.fill();
+    });
+  }
+  function mathIcon(x, y, s) { withT(x, y, s, 0, () => { ['+', '−', '×', '÷'].forEach((c, i) => txt(c, (i % 2 ? 22 : -22), (i < 2 ? -20 : 24), 50, K.ink, 700)); }); }
+  function atomIcon(x, y, s, rot, col = K.ink) {
+    withT(x, y, s, rot, () => {
+      ctx.strokeStyle = col; ctx.lineWidth = 6;
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(0, 0, 46, 17, i * Math.PI / 3, 0, 7); ctx.stroke(); }
+      ctx.fillStyle = K.pink; ctx.beginPath(); ctx.arc(0, 0, 9, 0, 7); ctx.fill();
+    });
+  }
+  function starIcon(x, y, r, rot, col) {
+    ctx.fillStyle = col; ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const a = rot - Math.PI / 2 + i * Math.PI / 5, r2 = i % 2 ? r * 0.45 : r; ctx.lineTo(x + Math.cos(a) * r2, y + Math.sin(a) * r2); }
+    ctx.closePath(); ctx.fill();
+  }
+  function sparkle(x, y, r, col) {
+    if (r <= 0) return;
+    ctx.fillStyle = col; ctx.beginPath();
+    ctx.moveTo(x, y - r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.quadraticCurveTo(x, y, x, y + r); ctx.quadraticCurveTo(x, y, x - r, y); ctx.quadraticCurveTo(x, y, x, y - r); ctx.fill();
+  }
+  function leafIcon(x, y, s, rot, col) {
+    withT(x, y, s, rot, () => {
+      ctx.fillStyle = col; ctx.strokeStyle = K.ink; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(-50, 0); ctx.quadraticCurveTo(0, -38, 50, 0); ctx.quadraticCurveTo(0, 38, -50, 0); ctx.fill(); ctx.stroke();
+      ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-42, 0); ctx.lineTo(42, 0); ctx.stroke();
+    });
+  }
+  function checkMark(x, y, s, p, col, lw = 14) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    drawPath([[x - 0.5 * s, y], [x - 0.15 * s, y + 0.35 * s], [x + 0.55 * s, y - 0.4 * s]], p);
+    ctx.lineCap = 'butt';
+  }
+  function cursor(x, y, s = 1, press = 0) {
+    withT(x, y, s * (1 - press * 0.15), 0, () => {
+      ctx.fillStyle = K.white; ctx.strokeStyle = K.ink; ctx.lineWidth = 3.5; ctx.lineJoin = 'round';
+      ctx.beginPath(); [[0, 0], [0, 54], [14, 41], [24, 63], [34, 58], [24, 37], [42, 37]].forEach(([a, b], i) => i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    });
+  }
+  function ripple(x, y, t, t0, col = K.white) {
+    const p = prog(t, t0, t0 + 0.5); if (p <= 0 || p >= 1) return;
+    ctx.strokeStyle = col; ctx.globalAlpha = 1 - p; ctx.lineWidth = 8 * (1 - p) + 2;
+    ctx.beginPath(); ctx.arc(x, y, 20 + 90 * E.outExpo(p), 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function burst(x, y, t, t0, col, n = 10, r0 = 60, r1 = 170) {
+    const p = prog(t, t0, t0 + 0.45); if (p <= 0 || p >= 1) return;
+    const e = E.outExpo(p); ctx.strokeStyle = col; ctx.lineWidth = 10 * (1 - p) + 1; ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + 0.2; const a0 = lerp(r0, r1, e * 0.6), a1 = lerp(r0, r1, e); ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * a0, y + Math.sin(a) * a0); ctx.lineTo(x + Math.cos(a) * a1, y + Math.sin(a) * a1); ctx.stroke(); }
+    ctx.lineCap = 'butt';
+  }
+  function capsule(x, y, s, t, look = 0, dark = false) {
+    withT(x, y, s, Math.sin(t * 3) * 0.05, () => {
+      ctx.fillStyle = K.ink; rr(-55, -150, 110, 300, 55); ctx.fill();
+      if (dark) { ctx.strokeStyle = K.lime; ctx.lineWidth = 6; ctx.stroke(); }
+      eyes(-6 + look * 8, -95, 1, t);
+    });
+  }
+  function blob(x, y, s, t, look = 0) {
+    withT(x, y, s, Math.sin(t * 3.4 + 1) * 0.06, () => {
+      ctx.fillStyle = K.pink; ctx.strokeStyle = K.ink; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.ellipse(0, 0, 80, 92, 0, 0, 7); ctx.fill(); ctx.stroke();
+      eyes(look * 8, -18, 0.95, t + 0.7);
+    });
+  }
+  function eyes(x, y, s, t) {
+    const blink = (t % 2.6) < 0.1 ? 0.15 : 1;
+    [-19, 19].forEach(dx => {
+      ctx.fillStyle = K.white; ctx.beginPath(); ctx.ellipse(x + dx * s, y, 14 * s, 14 * s * blink, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = K.ink; ctx.beginPath(); ctx.ellipse(x + dx * s + 3, y + 2, 6 * s, 6 * s * blink, 0, 0, 7); ctx.fill();
+    });
+    ctx.strokeStyle = K.white; ctx.lineWidth = 5 * s; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(x, y + 22 * s, 12 * s, 0.2, Math.PI - 0.2); ctx.stroke(); ctx.lineCap = 'butt';
+  }
+
+  // ---------- images ----------
+  const IM = {};
+  const loadImg = (k, src) => new Promise(res => { const i = new Image(); i.onload = () => { IM[k] = i; res(); }; i.onerror = () => res(); i.src = src; });
+  const imagesReady = Promise.all([loadImg('cover', 'assets/cover.png'), loadImg('canva', 'assets/canva.png'), loadImg('profile', 'assets/profile.png')]);
+  function img(k, sx, sy, sw, sh, dx, dy, dw, dh, r = 0) {
+    if (!IM[k]) { ctx.fillStyle = '#ccc'; rr(dx, dy, dw, dh, r); ctx.fill(); return; }
+    ctx.save(); if (r) { rr(dx, dy, dw, dh, r); ctx.clip(); }
+    ctx.drawImage(IM[k], sx, sy, sw, sh, dx, dy, dw, dh); ctx.restore();
+  }
+  // little labs logo from the profile screenshot; a lime band hides the "Note..." tooltip that overlaps it.
+  function logo(x, y, r) {
+    if (r <= 0) return;
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.clip();
+    ctx.fillStyle = K.lime; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    if (IM.profile) ctx.drawImage(IM.profile, 57.5, 55.5, 146, 146, x - r, y - r, 2 * r, 2 * r);
+    ctx.fillStyle = K.lime; ctx.fillRect(x - r, y - r, 2 * r, 15 * r / 73);
+    ctx.restore();
+  }
+
+  // ---------- captions (wrapped, one pill per line) ----------
+  const CAP_Y = 1440, CAP_PX = 54, CAP_MAX = 700;
+  function captions(t) {
+    const c = CAPS.find(([a, b]) => t >= a - 0.02 && t < b);
+    if (!c) return;
+    const [a, b, str, hl] = c;
+    ctx.font = font(CAP_PX, 600);
+    const sp = 16, words = str.split(' ').map(w => ({ w, width: ctx.measureText(w).width }));
+    const lines = [[]]; let lw = 0;
+    words.forEach(o => { const add = (lines[lines.length - 1].length ? sp : 0) + o.width; if (lw + add > CAP_MAX && lines[lines.length - 1].length) { lines.push([o]); lw = o.width; } else { lines[lines.length - 1].push(o); lw += add; } });
+    const lh = 92, top = CAP_Y - (lines.length - 1) * lh / 2;
+    const inP = E.outBack(prog(t, a, a + 0.3)), outP = E.inCubic(prog(t, b - 0.15, b));
+    ctx.globalAlpha = clamp(inP * 1.5) * (1 - outP);
+    let k = 0;
+    lines.forEach((ln, li) => {
+      const total = ln.reduce((s, o) => s + o.width, 0) + sp * (ln.length - 1);
+      const y = top + li * lh + (1 - inP) * 40 + outP * 30;
+      ctx.fillStyle = K.ink; rr(540 - total / 2 - 34, y - 42, total + 68, 84, 42); ctx.fill();
+      let x = 540 - total / 2;
+      ln.forEach(o => {
+        const wp = E.outBack(prog(t, a + k * 0.035, a + k * 0.035 + 0.25)); k++;
+        withT(x + o.width / 2, y + 2, 0.6 + 0.4 * wp, 0, () => txt(o.w, 0, 0, CAP_PX, hl.includes(o.w) ? K.lime : K.white, 600));
+        x += o.width + sp;
+      });
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- persistent chrome ----------
+  function brand(t, dark) {
+    if (t > 23.0) return;
+    ctx.globalAlpha = 1;
+    logo(106, 290, 36);
+    txt('little labs', 156, 292, 38, dark ? K.white : K.ink, 700, 'left');
+    ctx.globalAlpha = 1;
+  }
+  const TX = [760, 860, 960], TY = 290;
+  const STEP_AT = [P.step1 + 0.95, P.step2 + 0.95, P.step3 + 0.95];
+  const STEP_DONE = [P.step2, P.step3, P.hoursW];
+  function tracker(t) {
+    if (t < 7.2 || t > 23.0) return;
+    const a = prog(t, 7.2, 7.5) * (1 - prog(t, 22.8, 23.0));
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = K.ink; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(TX[0], TY); ctx.lineTo(TX[2], TY); ctx.stroke();
+    TX.forEach((x, i) => {
+      const act = t >= STEP_AT[i], done = t >= STEP_DONE[i];
+      const k = act ? pop(t, STEP_AT[i], 0.35) : 1;
+      withT(x, TY, k, 0, () => {
+        ctx.fillStyle = act ? K.ink : K.white; ctx.strokeStyle = K.ink; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(0, 0, 30, 0, 7); ctx.fill(); ctx.stroke();
+        if (done) checkMark(0, 2, 26, E.outCubic(prog(t, STEP_DONE[i], STEP_DONE[i] + 0.3)), K.lime, 7);
+        else txt(String(i + 1), 0, 2, 34, act ? K.lime : K.ink, 700);
+      });
+      if (act && !done) { const pp = ((t - STEP_AT[i]) % 1.2) / 1.2; ctx.strokeStyle = K.ink; ctx.globalAlpha = a * (1 - pp); ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, TY, 30 + 22 * pp, 0, 7); ctx.stroke(); ctx.globalAlpha = a; }
+    });
+    ctx.globalAlpha = 1;
+  }
+  function stepBadge(n, t0, t) {
+    const inP = pop(t, t0, 0.45);
+    if (inP <= 0) return;
+    const fly = E.inOutExpo(prog(t, t0 + 0.65, t0 + 0.95));
+    if (fly >= 1) return;
+    const x = lerp(540, TX[n - 1], fly), y = lerp(820, TY, fly), s = lerp(1, 0.2, fly) * inP;
+    withT(x, y, s, (1 - inP) * -0.3, () => {
+      ctx.globalAlpha = 1 - fly;
+      ctx.fillStyle = K.ink; rr(-400 + 14, -140 + 14, 800, 280, 140); ctx.fill();
+      ctx.fillStyle = K.white; rr(-400, -140, 800, 280, 140); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 8; ctx.stroke();
+      txt('STEP', -95, 8, 160, K.ink, 700);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = K.ink; ctx.beginPath(); ctx.arc(240, 0, 112, 0, 7); ctx.fill();
+      txt(String(n), 240, 10, 180, K.lime, 700);
+    });
+  }
+
+  // ---------- S1: hook (0 - 3.85) ----------
+  const HOUSE = [[330, 760], [330, 1110], [750, 1110], [750, 760], [540, 550], [330, 760], [750, 760]];
+  function s1(t) {
+    bg(K.lime); dots(t, K.ink, 0.1);
+    const outAP = prog(t, 1.4, 1.65), outA = E.inBack(outAP);
+    if (outAP < 1) withT(0, -outA * 1500, 1, 0, () => {
+      const a1 = E.outExpo(prog(t, -0.2, 0.15));
+      ctx.globalAlpha = clamp(a1 * 2); txt('Want an', 540, 560 + (1 - a1) * 60, 120, K.ink, 600); ctx.globalAlpha = 1;
+      const e = prog(t, P.easy, P.easy + 0.5);
+      if (e > 0) {
+        const s = lerp(2.6, 1, E.outExpo(e)), r = lerp(-0.25, -0.06, E.outBack(e));
+        withT(540, 790, s, r, () => {
+          ctx.globalAlpha = clamp(e * 6);
+          txt('EASY', 14, 14, 290, K.ink, 700); txt('EASY', 0, 0, 290, K.white, 700);
+          ctx.strokeStyle = K.ink; ctx.lineWidth = 7; ctx.font = font(290, 700); ctx.strokeText('EASY', 0, 0);
+          ctx.globalAlpha = 1;
+        });
+        burst(540, 790, t, P.easy + 0.05, K.ink, 14, 330, 500);
+        const sq = E.outCubic(prog(t, P.easy + 0.3, P.easy + 0.6));
+        ctx.strokeStyle = K.pink; ctx.lineWidth = 22; ctx.lineCap = 'round';
+        const pts = []; for (let i = 0; i <= 32; i++) pts.push([275 + i * 16.5, 950 + Math.sin(i * 0.9) * 15]);
+        drawPath(pts, sq); ctx.lineCap = 'butt';
+      }
+      const a3 = E.outExpo(prog(t, P.way, P.way + 0.4));
+      if (a3 > 0) { ctx.globalAlpha = a3; txt('way to get', 540, 1100 + (1 - a3) * 60, 120, K.ink, 600); ctx.globalAlpha = 1; }
+    });
+    const bIn = pop(t, P.hours1 - 0.05, 0.5);
+    if (bIn > 0) {
+      const c = E.inOutExpo(prog(t, P.home - 0.05, P.home + 0.3));
+      const cx = 540, cy = lerp(640, 900, c), r = lerp(200, 108, c) * bIn;
+      if (c > 0) {
+        ctx.strokeStyle = K.ink; ctx.lineWidth = 26; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        const hp = E.inOutCubic(prog(t, P.home, P.home + 0.55));
+        const dp = pop(t, P.home + 0.45, 0.35);
+        if (dp > 0) { ctx.fillStyle = K.ink; ctx.fillRect(640, 640 - 70 * dp, 52, 90 * dp); }
+        if (hp > 0.98) { ctx.fillStyle = K.white; ctx.beginPath(); HOUSE.slice(0, 5).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.fill(); }
+        drawPath(HOUSE, hp);
+        if (dp > 0) { ctx.fillStyle = K.pink; ctx.lineWidth = 20; rr(630, 1110 - 150 * dp, 84, 150 * dp, [20, 20, 0, 0]); ctx.fill(); ctx.stroke(); }
+        ctx.lineCap = 'butt';
+      }
+      clockIcon(cx, cy, r, t, 14);
+      ctx.strokeStyle = K.pink; ctx.lineWidth = 18 * (1 - c * 0.5); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, cy, r + 26 * (1 - c * 0.5), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * E.outCubic(prog(t, P.hours1, P.home))); ctx.stroke(); ctx.lineCap = 'butt';
+      const outB = E.inBack(prog(t, P.home - 0.1, P.home + 0.2));
+      withT(0, outB * 1400, 1, 0, () => {
+        const word = (w, cxw, y, px, t0, fill) => {
+          ctx.font = font(px, 700); const total = ctx.measureText(w).width; const x = cxw - total / 2;
+          [...w].forEach((ch, i) => {
+            ctx.font = font(px, 700); const pre = ctx.measureText(w.slice(0, i)).width, cw = ctx.measureText(ch).width;
+            const p = pop(t, t0 + i * 0.035, 0.4);
+            if (p > 0) withT(x + pre + cw / 2, y, p, (1 - p) * 0.6, () => txt(ch, 0, 0, px, fill, 700));
+          });
+          return total;
+        };
+        word('VOLUNTEER', 540, 1000, 140, P.hours1, K.ink);
+        ctx.font = font(190, 700); const hw = ctx.measureText('HOURS').width;
+        const mk = E.outExpo(prog(t, P.hours1 + 0.3, P.hours1 + 0.6));
+        ctx.fillStyle = K.pink; rr(540 - hw / 2 - 36, 1100, (hw + 72) * mk, 200, 34); ctx.fill();
+        word('HOURS', 540, 1204, 190, P.hours1 + 0.3, K.ink);
+      });
+      const hm = pop(t, P.home + 0.15, 0.4);
+      if (hm > 0) withT(540, 1255, hm, 0, () => {
+        ctx.font = font(100, 700); const w1 = ctx.measureText('from ').width, w2 = ctx.measureText('HOME?').width;
+        ctx.fillStyle = K.ink; rr(-(w1 + w2) / 2 - 44, -66, w1 + w2 + 88, 132, 66); ctx.fill();
+        txt('from ', -(w1 + w2) / 2, 4, 100, K.white, 600, 'left');
+        txt('HOME?', -(w1 + w2) / 2 + w1, 4, 100, K.lime, 700, 'left');
+      });
+    }
+    const wp = E.inOutCubic(prog(t, 3.45, 3.85));
+    if (wp > 0) { ctx.fillStyle = K.ink; ctx.beginPath(); ctx.arc(540, 900, 2300 * wp, 0, 7); ctx.fill(); }
+    brand(t, false);
+  }
+
+  // ---------- S2: the trick (3.85 - 7.1) ----------
+  function bulbPath() { ctx.beginPath(); ctx.arc(0, 0, 150, Math.PI * 0.78, Math.PI * 2.22); ctx.lineTo(50, 210); ctx.lineTo(-50, 210); ctx.closePath(); }
+  function s2(t) {
+    bg(K.ink); dots(t, K.lime, 0.07);
+    const bOut = E.inBack(prog(t, P.make - 0.15, P.make + 0.15));
+    if (bOut < 1) withT(540, 760, 1 - bOut, 0, () => {
+      const lit = t >= P.trickW ? (t < P.trickW + 0.12 ? (Math.floor(t * 40) % 2) : 1) : 0;
+      if (lit) {
+        const g = ctx.createRadialGradient(0, 0, 40, 0, 0, 560);
+        g.addColorStop(0, 'rgba(209,255,66,.55)'); g.addColorStop(1, 'rgba(209,255,66,0)');
+        ctx.fillStyle = g; ctx.fillRect(-1200, -1200, 2400, 2400);
+      }
+      const dp = E.inOutCubic(prog(t, P.trick, P.trick + 0.4));
+      bulbPath(); ctx.fillStyle = lit ? K.lime : 'rgba(255,255,255,.04)'; if (dp > 0.95) ctx.fill();
+      ctx.strokeStyle = lit ? K.white : K.lime; ctx.lineWidth = 16; ctx.lineJoin = 'round';
+      ctx.setLineDash([1200 * dp, 3000]); bulbPath(); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = K.white; ctx.globalAlpha = clamp(dp * 3 - 2);
+      rr(-55, 225, 110, 26, 13); ctx.fill(); rr(-45, 262, 90, 26, 13); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = lit ? K.ink : K.lime; ctx.lineWidth = 8; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-30, 160); ctx.lineTo(-30, 50); ctx.quadraticCurveTo(0, 0, 30, 50); ctx.lineTo(30, 160); ctx.stroke(); ctx.lineCap = 'butt';
+      if (lit) {
+        const rp = E.outBack(prog(t, P.trickW, P.trickW + 0.4));
+        ctx.strokeStyle = K.lime; ctx.lineWidth = 14; ctx.lineCap = 'round';
+        for (let i = 0; i < 9; i++) { const a = Math.PI + i / 8 * Math.PI; const r0 = 200 * rp, r1 = 275 * rp; ctx.beginPath(); ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); ctx.stroke(); }
+        ctx.lineCap = 'butt';
+      }
+    });
+    const cIn = prog(t, P.make + 0.05, P.make + 0.6);
+    if (cIn > 0) {
+      const ch = 620, cw = ch * 399 / 566;
+      const y = lerp(-500, 780, E.outBack(cIn)), rot = lerp(-0.25, -0.035, E.outBack(cIn)) + Math.sin(t * 1.6) * 0.012;
+      withT(540, y, 1, rot, () => {
+        ctx.fillStyle = K.lime; rr(-cw / 2 + 18, -ch / 2 + 18, cw, ch, 22); ctx.fill();
+        img('cover', 0, 0, 399, 566, -cw / 2, -ch / 2, cw, ch, 22);
+        ctx.strokeStyle = K.white; ctx.lineWidth = 6; rr(-cw / 2, -ch / 2, cw, ch, 22); ctx.stroke();
+      });
+      const B = [['S', 'Science', 160, 540], ['T', 'Technology', 905, 540], ['E', 'Engineering', 160, 900], ['M', 'Math', 905, 900]];
+      B.forEach(([L, name, x, y0], i) => {
+        const p = pop(t, P.stem + i * 0.09, 0.45); if (p <= 0) return;
+        const y = y0 + Math.sin(t * 2.2 + i) * 10;
+        withT(x, y, p * 0.82, 0, () => {
+          ctx.fillStyle = K.lime; ctx.beginPath(); ctx.arc(0, 0, 100, 0, 7); ctx.fill();
+          if (i === 0) flaskIcon(0, 4, 1.1, t); if (i === 1) laptopIcon(0, 0, 1.1, t); if (i === 2) gearIcon(0, 0, 1.2, t * 1.5); if (i === 3) mathIcon(0, 2, 1.05);
+          ctx.fillStyle = K.pink; ctx.beginPath(); ctx.arc(72, -72, 36, 0, 7); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 5; ctx.stroke();
+          txt(L, 72, -69, 44, K.ink, 700);
+          txt(name, 0, 150, 42, K.white, 600);
+        });
+      });
+      const k1 = E.outBack(prog(t, P.kids - 0.05, P.kids + 0.4)), k2 = E.outBack(prog(t, P.kids + 0.08, P.kids + 0.5));
+      if (k1 > 0) capsule(330, lerp(1600, 1215, k1), 0.8, t, 1, true);
+      if (k2 > 0) blob(760, lerp(1600, 1235, k2), 0.85, t, -1);
+    }
+    const wp = E.inOutCubic(prog(t, 6.8, 7.12));
+    if (wp > 0) { const y0 = lerp(H + 300, -500, wp); ctx.fillStyle = K.lime; ctx.beginPath(); ctx.moveTo(0, y0 + 300); ctx.lineTo(W, y0); ctx.lineTo(W, H + 600); ctx.lineTo(0, H + 600); ctx.closePath(); ctx.fill(); }
+    brand(t, true);
+  }
+
+  // ---------- S3: step one, Canva (7.1 - 11.1) ----------
+  const WIN = { x: 70, y: 560, w: 940, h: 526, bar: 56 };
+  const CS = WIN.w / 1355, COY = WIN.y + WIN.bar + (WIN.h - WIN.bar - 606 * CS) / 2;
+  const cmap = (x, y) => [WIN.x + x * CS, COY + y * CS];
+  const CARD = (() => { const [x, y] = cmap(142, 26); return { x, y, w: 650 * CS, h: 545 * CS }; })();
+  const CARDC = [CARD.x + CARD.w / 2, CARD.y + CARD.h / 2];
+  const BTN = cmap(1090, 250);
+  const S4CARD = { w: 900, h: 900 * 545 / 650, cx: 540, cy: 830 };
+  const ANCHOR = [540, 830];
+  function camS3(t) {
+    const k0 = [540, WIN.y + WIN.h / 2 - 10, 1 + 0.1 * E.inOutCubic(prog(t, P.canva + 0.4, 9.72))], k1 = [CARDC[0], CARDC[1], 1.55], k2 = [BTN[0], BTN[1], 2.0], k3 = [CARDC[0], CARDC[1], S4CARD.w / CARD.w];
+    const seg = (a, b, p) => [lerp(a[0], b[0], p), lerp(a[1], b[1], p), lerp(a[2], b[2], p)];
+    if (t < 9.72) return k0;
+    if (t < 10.02) return seg(k0, k1, E.inOutExpo(prog(t, 9.72, 10.02)));
+    if (t < 10.62) return seg(k1, k2, E.inOutExpo(prog(t, 10.02, 10.3)));
+    return seg(k2, k3, E.inOutExpo(prog(t, 10.62, 11.05)));
+  }
+  const toScreen = (cam, x, y) => [ANCHOR[0] + (x - cam[0]) * cam[2], ANCHOR[1] + (y - cam[1]) * cam[2]];
+  function s3(t) {
+    bg(K.lime); dots(t, K.ink, 0.1);
+    const cam = camS3(t);
+    const zoom = prog(t, 10.62, 11.05);
+    ctx.save();
+    ctx.translate(ANCHOR[0], ANCHOR[1]); ctx.scale(cam[2], cam[2]); ctx.translate(-cam[0], -cam[1]);
+    const inP = E.outExpo(prog(t, P.canva - 0.05, P.canva + 0.55));
+    if (inP > 0) {
+      ctx.translate(0, (1 - inP) * 1300);
+      ctx.fillStyle = K.ink; rr(WIN.x + 14, WIN.y + 14, WIN.w, WIN.h, 24); ctx.fill();
+      ctx.fillStyle = K.canvaDark; rr(WIN.x, WIN.y, WIN.w, WIN.h, 24); ctx.fill();
+      ctx.fillStyle = '#2B2E37'; rr(WIN.x, WIN.y, WIN.w, WIN.bar, [24, 24, 0, 0]); ctx.fill();
+      ['#FF5F57', '#FEBC2E', '#28C840'].forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(WIN.x + 34 + i * 28, WIN.y + 28, 8, 0, 7); ctx.fill(); });
+      const url = 'canva.com/templates';
+      const n = Math.floor(clamp((t - P.canva - 0.1) * 40, 0, url.length));
+      const glow = Math.max(0, 1 - Math.abs(t - 8.75) / 0.45);
+      ctx.fillStyle = glow > 0 ? `rgba(209,255,66,${0.25 + glow * 0.6})` : '#1D1F26'; rr(WIN.x + 130, WIN.y + 11, 520, 34, 17); ctx.fill();
+      const uc = glow > 0.4 ? K.ink : K.white;
+      ctx.strokeStyle = uc; ctx.fillStyle = uc; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(WIN.x + 155, WIN.y + 24, 5, Math.PI, 0); ctx.stroke(); ctx.fillRect(WIN.x + 148, WIN.y + 24, 14, 11);
+      txt(url.slice(0, n), WIN.x + 172, WIN.y + 29, 24, uc, 500, 'left');
+      img('canva', 0, 0, 1355, 606, WIN.x, COY, 1355 * CS, 606 * CS);
+      const hp = E.outCubic(prog(t, P.childrens + 0.1, P.childrens + 0.4));
+      if (hp > 0) {
+        ctx.strokeStyle = K.lime; ctx.lineWidth = 6; ctx.setLineDash([18, 11]); ctx.lineDashOffset = -t * 50;
+        const pad = 9; ctx.globalAlpha = hp * (1 - zoom);
+        rr(CARD.x - pad, CARD.y - pad, CARD.w + pad * 2, CARD.h + pad * 2, 16); ctx.stroke(); ctx.setLineDash([]);
+        const tp = pop(t, P.childrens + 0.2, 0.4);
+        withT(CARD.x + 14, CARD.y + 40, tp * 0.62, 0, () => {
+          ctx.font = font(34, 700); const tw = ctx.measureText('Template found').width;
+          ctx.fillStyle = K.lime; rr(0, -30, tw + 88, 60, 30); ctx.fill(); checkMark(34, 0, 26, 1, K.ink, 7);
+          txt('Template found', 64, 2, 34, K.ink, 700, 'left');
+        });
+        ctx.globalAlpha = 1;
+      }
+      const press = Math.max(0, 1 - Math.abs(t - 10.42) / 0.1);
+      if (press > 0) { ctx.fillStyle = `rgba(12,16,20,${press * 0.35})`; const [x0, y0] = cmap(947, 232); rr(x0, y0, 288 * CS, 38 * CS, 6); ctx.fill(); }
+      ripple(BTN[0], BTN[1], t, 10.42, K.lime);
+    }
+    ctx.restore();
+    // search bar (screen space, above the window)
+    const sp = pop(t, P.find - 0.08, 0.4), sFade = 1 - prog(t, 9.72, 9.9);
+    if (sp > 0 && sFade > 0) withT(540, 440, sp, 0, () => {
+      ctx.globalAlpha = sFade;
+      ctx.fillStyle = K.ink; rr(-440 + 10, -50 + 10, 880, 100, 50); ctx.fill();
+      ctx.fillStyle = K.white; rr(-440, -50, 880, 100, 50); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 5; ctx.stroke();
+      ctx.strokeStyle = K.ink; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(-376, -6, 18, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-363, 7); ctx.lineTo(-346, 24); ctx.stroke();
+      const q = "children's book template";
+      const n = Math.floor(clamp((t - P.find - 0.02) / 0.75 * q.length, 0, q.length));
+      const shown = q.slice(0, n);
+      txt(shown, -322, 2, 44, K.ink, 500, 'left');
+      ctx.font = font(44, 500);
+      if (Math.floor(t * 3) % 2 === 0 || n < q.length) { ctx.fillStyle = K.pink; ctx.fillRect(-320 + ctx.measureText(shown).width, -24, 5, 50); }
+      ctx.globalAlpha = 1;
+    });
+    // cursor
+    if (t > 9.8 && t < 10.7) {
+      const [bx, by] = toScreen(cam, BTN[0], BTN[1]);
+      const m = E.inOutCubic(prog(t, 9.85, 10.32));
+      const x = lerp(760, bx - 8, m), y = lerp(1330, by - 4, m) + Math.sin(m * Math.PI) * -80;
+      cursor(x, y, 1.45, Math.max(0, 1 - Math.abs(t - 10.42) / 0.1));
+    }
+    if (zoom > 0) {
+      ctx.globalAlpha = E.inOutCubic(prog(t, 10.62, 10.72)); bg(K.paper); s4bg(t); ctx.globalAlpha = 1;
+      const [x0, y0] = toScreen(cam, CARD.x, CARD.y);
+      img('canva', 142, 26, 650, 545, x0, y0, CARD.w * cam[2], CARD.h * cam[2], 24 * zoom);
+    }
+    brand(t, false);
+  }
+
+  // ---------- S4: step two, make it yours (11.1 - 17.4) ----------
+  function s4bg(t) {
+    const a = ctx.globalAlpha;
+    ctx.fillStyle = K.lime; ctx.globalAlpha = a * 0.55;
+    ctx.beginPath(); ctx.arc(120 + Math.sin(t * 0.7) * 30, 1500, 360, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(1000, 480 + Math.cos(t * 0.6) * 30, 300, 0, 7); ctx.fill();
+    ctx.globalAlpha = a;
+  }
+  const BIG_H = 860, BIG_W = BIG_H * 399 / 566;       // cover when flipped
+  const SM_H = 600, SM_W = SM_H * 399 / 566;          // cover beside the story page
+  const PAGE = { x: 520, y: 420, w: 490, h: 600 };
+  function s4(t) {
+    bg(K.paper); s4bg(t);
+    const dim = prog(t, P.step2 - 0.05, P.step2 + 0.2) * (1 - prog(t, P.step2 + 0.7, P.step2 + 0.95));
+    const flipA = prog(t, 12.25, 12.5), flipB = prog(t, 12.5, 12.8);
+    const open = E.inOutExpo(prog(t, P.write, P.write + 0.45));
+    if (flipA < 1) {
+      const sx = 1 - E.inCubic(flipA), s = 1 - dim * 0.1;
+      withT(S4CARD.cx, S4CARD.cy, s, 0, () => { ctx.scale(sx, 1); img('canva', 142, 26, 650, 545, -S4CARD.w / 2, -S4CARD.h / 2, S4CARD.w, S4CARD.h, 24); ctx.fillStyle = `rgba(12,16,20,${dim * 0.35})`; rr(-S4CARD.w / 2, -S4CARD.h / 2, S4CARD.w, S4CARD.h, 24); ctx.fill(); });
+    } else {
+      const sx = E.outBack(flipB);
+      const cx = lerp(540, 70 + SM_W / 2, open), cy = lerp(840, PAGE.y + SM_H / 2, open), k = lerp(1, SM_H / BIG_H, open);
+      withT(cx, cy, k, -0.02 * (1 - open), () => {
+        ctx.scale(Math.max(0.001, sx), 1);
+        ctx.fillStyle = K.ink; rr(-BIG_W / 2 + 16, -BIG_H / 2 + 16, BIG_W, BIG_H, 26); ctx.fill();
+        img('cover', 0, 0, 399, 566, -BIG_W / 2, -BIG_H / 2, BIG_W, BIG_H, 26);
+        ctx.strokeStyle = K.ink; ctx.lineWidth = 6; rr(-BIG_W / 2, -BIG_H / 2, BIG_W, BIG_H, 26); ctx.stroke();
+        const bp = E.outCubic(prog(t, 13.0, 13.35)) * (1 - prog(t, 13.9, 14.2));
+        if (bp > 0) { const s = BIG_H / 566; ctx.strokeStyle = K.pink; ctx.lineWidth = 9; ctx.globalAlpha = bp; rr(-BIG_W / 2 + 78 * s, -BIG_H / 2 + 528 * s, 243 * s * bp, 29 * s, 18); ctx.stroke(); ctx.globalAlpha = 1; }
+      });
+    }
+    const st = prog(t, 12.78, 12.98);
+    if (st > 0 && open < 1) {
+      const s = lerp(2.4, 1, E.outExpo(st)) * (1 - E.inBack(prog(t, P.write - 0.1, P.write + 0.2)));
+      withT(850, 770, s * 0.9, -0.16, () => {
+        ctx.globalAlpha = clamp(st * 5);
+        ctx.fillStyle = K.ink; rr(-180 + 10, -66 + 10, 360, 132, 32); ctx.fill();
+        ctx.fillStyle = K.pink; rr(-180, -66, 360, 132, 32); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 7; ctx.stroke();
+        txt('YOURS!', 0, 6, 92, K.ink, 700); ctx.globalAlpha = 1;
+      });
+      burst(850, 770, t, 12.8, K.pink, 12, 170, 280);
+    }
+    if (open > 0) {
+      const { x: px, y: py, w: pw, h: ph } = PAGE;
+      withT(px, 0, 1, 0, () => {
+        ctx.scale(open, 1);
+        ctx.fillStyle = K.ink; rr(14, py + 14, pw, ph, 22); ctx.fill();
+        ctx.fillStyle = K.white; rr(0, py, pw, ph, 22); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 5; ctx.stroke();
+      });
+      if (open > 0.9) {
+        const lines = [['Where Is Cami?', 44, 700, K.green, 13.95, 14.35], ['Cami is a chameleon.', 30, 500, K.ink, 14.4, 14.85], ['She can change color', 30, 500, K.ink, 14.85, 15.3], ['to hide in the leaves!', 30, 500, K.ink, 15.3, 15.75]];
+        let lastX = px + 30, lastY = py + 64;
+        lines.forEach(([s, fp, w, col, a, b], i) => {
+          const n = Math.floor(prog(t, a, b) * s.length); if (n <= 0) return;
+          const y = py + 64 + (i ? 34 + i * 44 : 0);
+          txt(s.slice(0, n), px + 30, y, fp, col, w, 'left');
+          ctx.font = font(fp, w); lastX = px + 30 + ctx.measureText(s.slice(0, n)).width; lastY = y;
+        });
+        if (t < 15.95) withT(lastX + 16, lastY - 26, 0.9, 0.6, () => {
+          ctx.fillStyle = '#FFC93C'; ctx.strokeStyle = K.ink; ctx.lineWidth = 4; rr(-12, -90, 24, 80, 4); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = K.pink; rr(-12, -104, 24, 18, 4); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#F4D7B0'; ctx.beginPath(); ctx.moveTo(-12, -10); ctx.lineTo(12, -10); ctx.lineTo(0, 16); ctx.closePath(); ctx.fill(); ctx.stroke();
+        });
+        const ip = pop(t, P.teach, 0.45);
+        if (ip > 0) {
+          const ix = px + 24, iy = py + 270, iw = pw - 48, ih = 300;
+          withT(ix + iw / 2, iy + ih / 2, ip, 0, () => {
+            ctx.save(); rr(-iw / 2, -ih / 2, iw, ih, 18); ctx.clip();
+            ctx.fillStyle = '#CDEFC0'; ctx.fillRect(-iw / 2, -ih / 2, iw, ih);
+            [[-130, -85, 0.4], [120, -100, -0.5], [-150, 95, -0.3], [140, 100, 0.6], [0, -125, 0.1]].forEach(([x, y, r]) => leafIcon(x, y, 1.1, r, K.leaf));
+            ctx.strokeStyle = '#8B5A2B'; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(-iw / 2, 40); ctx.quadraticCurveTo(0, 20, iw / 2, 50); ctx.stroke();
+            const cam = E.inOutCubic(prog(t, 15.45, 16.1));
+            const r0 = [255, 140, 60], r1 = [76, 175, 80];
+            const col = `rgb(${r0.map((v, i) => Math.round(lerp(v, r1[i], cam))).join(',')})`;
+            ctx.fillStyle = col; ctx.strokeStyle = `rgba(12,16,20,${1 - cam * 0.75})`; ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.ellipse(0, 5, 78, 44, 0, 0, 7); ctx.fill(); ctx.stroke();
+            ctx.lineWidth = 16; ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(95, 24, 22, Math.PI, Math.PI * 2.6); ctx.stroke();
+            ctx.fillStyle = K.white; ctx.beginPath(); ctx.arc(-44, -6, 17, 0, 7); ctx.fill();
+            ctx.fillStyle = K.ink; ctx.beginPath(); ctx.arc(-40 + Math.sin(t * 3) * 4, -6, 8, 0, 7); ctx.fill();
+            ctx.restore();
+            ctx.strokeStyle = K.ink; ctx.lineWidth = 5; rr(-iw / 2, -ih / 2, iw, ih, 18); ctx.stroke();
+            const q = pop(t, 16.05, 0.35);
+            if (q > 0) withT(iw / 2 - 40, -ih / 2 + 40, q, 0.2, () => { ctx.fillStyle = K.pink; ctx.beginPath(); ctx.arc(0, 0, 36, 0, 7); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 5; ctx.stroke(); txt('?', 0, 3, 50, K.ink, 700); });
+          });
+        }
+      }
+      const sc = prog(t, P.science, P.science + 0.8);
+      if (sc > 0) {
+        const cxs = 540, cys = 1170;
+        const items = [[0, -1], [0.9, -0.55], [1, 0.45], [0.55, 1], [-0.55, 1], [-1, 0.45], [-0.9, -0.55], [-0.3, -1]];
+        const a = 1 - prog(t, 17.0, 17.3);
+        items.forEach(([dx, dy], i) => {
+          const e = E.outExpo(sc), r = 380 + (i % 2) * 60;
+          const x = cxs + dx * r * e * 1.0, y = cys + dy * r * e * 0.27;
+          ctx.globalAlpha = a;
+          if (i % 4 === 0) atomIcon(x, y, 1.0 * e, t * 2 + i, K.ink);
+          else if (i % 4 === 1) starIcon(x, y, 34 * e, t + i, K.pink);
+          else if (i % 4 === 2) flaskIcon(x, y, 0.85 * e, t);
+          else sparkle(x, y, 38 * e, K.ink);
+          ctx.globalAlpha = 1;
+        });
+        const cp = pop(t, P.science + 0.1, 0.45);
+        withT(540, 1170, cp, -0.03, () => {
+          ctx.font = font(58, 700); const w1 = ctx.measureText('SCIENCE: ').width, w2 = ctx.measureText('camouflage').width;
+          pill(-(w1 + w2) / 2 - 44, -56, w1 + w2 + 88, 112, K.lime);
+          txt('SCIENCE: ', -(w1 + w2) / 2, 4, 58, K.ink, 700, 'left'); txt('camouflage', -(w1 + w2) / 2 + w1, 4, 58, K.green, 700, 'left');
+        });
+      }
+    }
+    stepBadge(2, P.step2, t);
+    const wp = E.inOutCubic(prog(t, 17.05, 17.45));
+    if (wp > 0) {
+      const x0 = lerp(W + 200, -600, wp);
+      ctx.fillStyle = K.pink; ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(W + 800, 0); ctx.lineTo(W + 800, H); ctx.lineTo(x0 + 350, H); ctx.quadraticCurveTo(x0 - 160, H / 2, x0, 0); ctx.fill();
+      ctx.strokeStyle = K.ink; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(x0 + 350, H); ctx.quadraticCurveTo(x0 - 160, H / 2, x0, 0); ctx.stroke();
+    }
+    brand(t, false);
+  }
+
+  // ---------- S5: step three (17.4 - 23.1) ----------
+  const PK = 940 / 508, PX = 70, PY = 740 - 237 * PK / 2;
+  const pmap = (x, y) => [PX + x * PK, PY + y * PK];
+  const CONF = (() => { const R = rng(11), a = []; for (let i = 0; i < 170; i++) a.push({ a: R() * Math.PI * 2, v: 700 + R() * 1300, r: R() * 6, vr: (R() - .5) * 14, c: [K.lime, K.ink, K.white, K.lime, '#FFC93C'][i % 5], w: 14 + R() * 16, h: 8 + R() * 10 }); return a; })();
+  const FORM = { w: 880, h: 900, cx: 540, cy: 850 };
+  function s5(t) {
+    bg(K.pink); dots(t, K.ink, 0.1);
+    const pIn = E.outBack(prog(t, P.link - 0.1, P.link + 0.4));
+    const pOutP = prog(t, P.submit - 0.08, P.submit + 0.25), pOut = E.inBack(pOutP);
+    if (pIn > 0 && pOutP < 1) withT(-pOut * 1400, (1 - pIn) * 900, 1, 0, () => {
+      const w = 508 * PK, h = 237 * PK;
+      ctx.fillStyle = K.ink; rr(PX + 16, PY + 16, w, h, 28); ctx.fill();
+      img('profile', 0, 0, 508, 237, PX, PY, w, h, 28);
+      ctx.strokeStyle = K.ink; ctx.lineWidth = 6; rr(PX, PY, w, h, 28); ctx.stroke();
+      const lp = E.outCubic(prog(t, 18.9, 19.2));
+      if (lp > 0) {
+        const [x0, y0] = pmap(236, 198), [x1, y1] = pmap(408, 220);
+        ctx.strokeStyle = K.lime; ctx.lineWidth = 7; rr(x0 - 8, y0 - 3, (x1 - x0 + 16) * lp, y1 - y0 + 8, 14); ctx.stroke();
+        const g = 0.5 + 0.5 * Math.sin(t * 10); ctx.fillStyle = `rgba(209,255,66,${0.12 + 0.1 * g})`; rr(x0 - 8, y0 - 3, (x1 - x0 + 16) * lp, y1 - y0 + 8, 14); ctx.fill();
+      }
+      const sp = pop(t, 19.3, 0.4);
+      if (sp > 0) {
+        const [lx, ly] = pmap(322, 222);
+        ctx.strokeStyle = K.ink; ctx.lineWidth = 9; ctx.lineCap = 'round';
+        const ap = E.outCubic(prog(t, 19.4, 19.65));
+        const sx = 470, sy = 1110;
+        const pts = []; for (let i = 0; i <= 20; i++) { const u = i / 20; pts.push([lerp(sx, lx - 10, u) - Math.sin(u * Math.PI) * 70, lerp(sy, ly + 26, u)]); }
+        drawPath(pts, ap);
+        if (ap > 0.95) { ctx.beginPath(); ctx.moveTo(lx - 10, ly + 26); ctx.lineTo(lx - 40, ly + 44); ctx.moveTo(lx - 10, ly + 26); ctx.lineTo(lx - 6, ly + 60); ctx.stroke(); }
+        ctx.lineCap = 'butt';
+        withT(470, 1180, sp, -0.06, () => {
+          pill(-210, -54, 420, 108, K.lime);
+          txt('LINK IN BIO', 0, 4, 56, K.ink, 700);
+        });
+      }
+    });
+    if (t > 18.75 && t < 19.75) {
+      const [lx, ly] = pmap(330, 209);
+      const m = E.inOutCubic(prog(t, 18.8, 19.4));
+      const press = Math.max(0, 1 - Math.abs(t - 19.5) / 0.08);
+      cursor(lerp(880, lx, m), lerp(1330, ly, m), 1.45, press);
+      ripple(lx, ly, t, 19.5, K.lime);
+    }
+    const fIn = E.outExpo(prog(t, P.submit - 0.02, P.submit + 0.4));
+    const fOutP = prog(t, P.getHours - 0.12, P.getHours + 0.18), fOut = E.inBack(fOutP);
+    if (fIn > 0 && fOutP < 1) withT(FORM.cx + (1 - fIn) * 1200, FORM.cy + fOut * 1300, 1 - fOut * 0.2, 0, () => {
+      const { w, h } = FORM, x = -w / 2, y = -h / 2;
+      ctx.fillStyle = K.ink; rr(x + 16, y + 16, w, h, 28); ctx.fill();
+      ctx.fillStyle = K.white; rr(x, y, w, h, 28); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 6; ctx.stroke();
+      ctx.fillStyle = K.ink; rr(x, y, w, 62, [28, 28, 0, 0]); ctx.fill();
+      ['#FF5F57', '#FEBC2E', '#28C840'].forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + 36 + i * 28, y + 31, 8, 0, 7); ctx.fill(); });
+      ctx.fillStyle = '#232A31'; rr(x + 130, y + 13, 520, 36, 18); ctx.fill();
+      txt('littlelabs-stem.github.io', x + 154, y + 32, 24, K.lime, 500, 'left');
+      txt('Submit your story', x + 50, y + 145, 62, K.ink, 700, 'left');
+      logo(x + w - 80, y + 145, 46);
+      txt('Story title', x + 50, y + 235, 30, '#5B6570', 600, 'left');
+      ctx.strokeStyle = K.ink; ctx.lineWidth = 4; rr(x + 50, y + 262, w - 100, 84, 18); ctx.stroke();
+      const title = 'Where Is Cami?'; const n = Math.floor(prog(t, 19.85, 20.3) * title.length);
+      txt(title.slice(0, n), x + 76, y + 305, 40, K.ink, 600, 'left');
+      ctx.setLineDash([16, 12]); ctx.strokeStyle = '#8C969F'; rr(x + 50, y + 385, w - 100, 270, 18); ctx.stroke(); ctx.setLineDash([]);
+      const up = E.outBack(prog(t, 19.95, 20.35));
+      if (up > 0) {
+        withT(lerp(x - 500, x + 160, up), y + 520, 1, lerp(-0.6, 0, up), () => img('cover', 0, 0, 399, 566, -75, -106, 150, 213, 10));
+        ctx.globalAlpha = up; txt('where-is-cami.pdf', x + 270, y + 500, 38, K.ink, 600, 'left'); txt('Uploaded', x + 270, y + 548, 30, K.green, 600, 'left'); ctx.globalAlpha = 1;
+      } else txt('Drop your book here', 0, y + 520, 36, '#8C969F', 500);
+      const done = t >= 20.72;
+      const press = Math.max(0, 1 - Math.abs(t - 20.65) / 0.08);
+      withT(0, y + 770, 1 - press * 0.06, 0, () => {
+        ctx.fillStyle = done ? K.green : K.ink; rr(-220, -54, 440, 108, 54); ctx.fill();
+        if (done) { checkMark(-132, 0, 34, E.outCubic(prog(t, 20.72, 20.95)), K.white, 9); txt('Submitted!', 26, 3, 48, K.white, 700); }
+        else txt('Submit', 0, 3, 48, K.lime, 700);
+      });
+      if (t > 20.25 && t < 21.0) {
+        const m = E.inOutCubic(prog(t, 20.3, 20.6));
+        cursor(lerp(320, 30, m), lerp(620, y + 775, m), 1.45, press);
+      }
+      ripple(0, y + 770, t, 20.65, K.green);
+      burst(0, y + 770, t, 20.72, K.green, 10, 250, 340);
+    });
+    const hIn = pop(t, P.getHours, 0.5);
+    if (hIn > 0) {
+      const cx = 540, cy = 760, R = 210;
+      withT(cx, cy, hIn, 0, () => {
+        ctx.fillStyle = K.ink; ctx.beginPath(); ctx.arc(14, 14, R + 34, 0, 7); ctx.fill();
+        ctx.fillStyle = K.white; ctx.beginPath(); ctx.arc(0, 0, R + 34, 0, 7); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 7; ctx.stroke();
+        const fill = E.inOutCubic(prog(t, P.getHours + 0.1, P.hoursW));
+        ctx.strokeStyle = '#E4E9EE'; ctx.lineWidth = 30; ctx.beginPath(); ctx.arc(0, 0, R - 8, 0, 7); ctx.stroke();
+        ctx.strokeStyle = K.lime; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(0, 0, R - 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fill); ctx.stroke(); ctx.lineCap = 'butt';
+        const sw = E.outBack(prog(t, P.hoursW, P.hoursW + 0.35));
+        if (sw <= 0) clockIcon(0, 0, 136, t, 22);
+        else { ctx.fillStyle = K.lime; ctx.beginPath(); ctx.arc(0, 0, 156 * sw, 0, 7); ctx.fill(); ctx.strokeStyle = K.ink; ctx.lineWidth = 7; ctx.stroke(); checkMark(0, 6, 115, E.outCubic(prog(t, P.hoursW + 0.05, P.hoursW + 0.35)), K.ink, 24); }
+      });
+      burst(cx, cy, t, P.hoursW, K.ink, 16, 270, 400);
+      ['HOURS', 'EARNED!'].forEach((w, i) => {
+        const p = pop(t, P.hoursW + i * 0.12, 0.4); if (p <= 0) return;
+        withT(540, 1120 + i * 150, p, (1 - p) * (i ? 0.2 : -0.2), () => {
+          ctx.font = font(150, 700);
+          txt(w, 9, 9, 150, K.ink, 700); txt(w, 0, 0, 150, i ? K.lime : K.white, 700);
+          ctx.strokeStyle = K.ink; ctx.lineWidth = 6; ctx.strokeText(w, 0, 0);
+        });
+      });
+      const dt = t - P.hoursW;
+      if (dt > 0) CONF.forEach(c => {
+        const x = cx + Math.cos(c.a) * c.v * dt * 0.7, y = cy + Math.sin(c.a) * c.v * dt * 0.7 + 1100 * dt * dt;
+        if (y > H + 50) return;
+        withT(x, y, 1, c.r + c.vr * dt, () => { ctx.fillStyle = c.c; ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h); });
+      });
+      const j1 = prog(t, P.gasp - 0.05, P.gasp + 0.45), j2 = prog(t, P.gasp + 0.05, P.gasp + 0.55);
+      if (j1 > 0) capsule(150, 1700 - Math.sin(Math.min(1, j1) * Math.PI * 0.75) * 420, 0.9, t, 1);
+      if (j2 > 0) blob(930, 1700 - Math.sin(Math.min(1, j2) * Math.PI * 0.75) * 420, 0.95, t, -1);
+    }
+    stepBadge(3, P.step3, t);
+    const wp = E.inOutCubic(prog(t, 22.8, 23.1));
+    if (wp > 0) { ctx.fillStyle = K.lime; ctx.beginPath(); ctx.arc(540, 760, 2300 * wp, 0, 7); ctx.fill(); }
+    brand(t, false);
+  }
+
+  // ---------- S6: end card (23.1 - 25.5) ----------
+  function s6(t) {
+    bg(K.lime); dots(t, K.ink, 0.1);
+    const lp = pop(t, 23.1, 0.55);
+    const cy = 700;
+    ctx.strokeStyle = K.ink; ctx.lineWidth = 6; ctx.setLineDash([18, 16]); ctx.lineDashOffset = -t * 40;
+    ctx.beginPath(); ctx.arc(540, cy, 222 * lp, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = K.ink; ctx.beginPath(); ctx.arc(554, cy + 14, 186 * lp, 0, 7); ctx.fill();
+    logo(540, cy, 186 * lp);
+    ctx.strokeStyle = K.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(540, cy, 186 * lp, 0, 7); ctx.stroke();
+    sparkle(800, 460, 36 * pop(t, 23.5, 0.4), K.ink); sparkle(290, 900, 26 * pop(t, 23.6, 0.4), K.ink);
+    const m1 = E.outBack(prog(t, 23.35, 23.8)), m2 = E.outBack(prog(t, 23.45, 23.9));
+    if (m1 > 0) capsule(175, lerp(1700, 760, m1), 0.85, t, 1);
+    if (m2 > 0) blob(905, lerp(1700, 800, m2), 0.9, t, -1);
+    [['Free STEM resources for kids', 1040, 23.55], ['Earn volunteer hours', 1120, 23.7]].forEach(([s, y, t0]) => {
+      const p = E.outExpo(prog(t, t0, t0 + 0.45)); if (p <= 0) return;
+      ctx.globalAlpha = p; txt(s, 540, y + (1 - p) * 40, 62, K.ink, 600); ctx.globalAlpha = 1;
+    });
+    const up = pop(t, 23.9, 0.45);
+    if (up > 0) withT(540, 1270, up, 0, () => {
+      ctx.font = font(50, 600); const w = ctx.measureText('littlelabs-stem.github.io').width;
+      ctx.fillStyle = K.ink; rr(-w / 2 - 86, -54, w + 146, 108, 54); ctx.fill();
+      ctx.strokeStyle = K.lime; ctx.lineWidth = 7;
+      withT(-w / 2 - 38, 0, 1, -0.78, () => { rr(-24, -12, 30, 24, 12); ctx.stroke(); rr(-6, -12, 30, 24, 12); ctx.stroke(); });
+      txt('littlelabs-stem.github.io', 30, 3, 50, K.lime, 600);
+    });
+    const bi = pop(t, 24.15, 0.45);
+    if (bi > 0) withT(540, 1420, bi, -0.05, () => {
+      pill(-190, -54, 380, 108, K.pink, 8);
+      txt('link in bio', 0, 3, 56, K.ink, 700);
+    });
+  }
+
+  // Instagram Reels interface, drawn only when the overlay toggle is on (for checking the safe area).
+  function igOverlay() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,0,80,.22)';
+    ctx.fillRect(0, 0, W, 220); ctx.fillRect(0, H - 380, W, 380); ctx.fillRect(W - 140, 1000, 140, H - 1380);
+    ctx.strokeStyle = 'rgba(255,0,80,.9)'; ctx.setLineDash([14, 10]); ctx.lineWidth = 3;
+    ctx.strokeRect(0, 240, W, 1440); ctx.setLineDash([]);
+    txt('Instagram header', 540, 110, 34, '#fff', 600); txt('caption, username, audio', 540, H - 190, 34, '#fff', 600);
+    txt('3:4 grid crop', 540, 1660, 26, 'rgba(255,0,80,1)', 600);
+    ctx.restore();
+  }
+
+  // ---------- master ----------
+  function shake(t) {
+    let a = 0;
+    [[P.easy + 0.05, 16], [12.8, 14], [P.hoursW, 18], [P.step1 + 0.08, 8], [P.step2 + 0.08, 8], [P.step3 + 0.08, 8]].forEach(([t0, amp]) => { const p = prog(t, t0, t0 + 0.3); if (p > 0 && p < 1) a += amp * (1 - p); });
+    return a;
+  }
+  let showSafe = false;
+  function renderAt(t) {
+    t = clamp(t, 0, D - 1e-4);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.setLineDash([]);
+    const a = shake(t);
+    if (a > 0) ctx.translate(Math.sin(t * 91) * a, Math.cos(t * 77) * a);
+    if (t < 3.85) s1(t);
+    else if (t < 7.1) s2(t);
+    else if (t < 11.1) { s3(t); stepBadge(1, P.step1, t); }
+    else if (t < 17.4) s4(t);
+    else if (t < 23.1) s5(t);
+    else s6(t);
+    tracker(t);
+    if (t >= 3.8) captions(t);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (showSafe || window.forceSafe) igOverlay();
+  }
+  window.renderAt = renderAt;
+  window.reelDuration = D;
+
+  // ---------- player ----------
+  const aud = document.getElementById('aud'), big = document.getElementById('big');
+  const playBtn = document.getElementById('play'), scrub = document.getElementById('scrub'), tc = document.getElementById('tc');
+  const SC = [[0, 'Hook'], [3.85, 'The trick'], [7.1, 'Step 1: Canva'], [11.1, 'Step 2: Write'], [17.4, 'Step 3: Submit'], [23.1, 'End card']];
+  const scWrap = document.getElementById('scenes');
+  SC.forEach(([a, n]) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = `<b>${a.toFixed(1)}s</b>${n}`; b.addEventListener('click', () => { pause(); seek(a + 0.3); }); scWrap.appendChild(b); });
+  let t = 1.95, playing = false, clock = null, audioOk = true;
+  aud.addEventListener('error', () => { audioOk = false; });
+  function seek(v) { t = clamp(v, 0, D); try { aud.currentTime = t; } catch (e) {} draw(); }
+  function draw() {
+    renderAt(t);
+    scrub.value = t; tc.textContent = `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+    playBtn.textContent = playing ? 'Pause' : 'Play'; big.hidden = playing;
+    let k = 0; SC.forEach(([a], i) => { if (t >= a) k = i; });
+    [...scWrap.children].forEach((b, i) => b.classList.toggle('on', i === k));
+  }
+  function play() {
+    if (t >= D - 0.05) seek(0);
+    playing = true; clock = null;
+    if (audioOk) { try { aud.currentTime = t; const pr = aud.play(); if (pr) pr.catch(() => { audioOk = false; }); } catch (e) { audioOk = false; } }
+    draw();
+  }
+  function pause() { playing = false; aud.pause(); draw(); }
+  function loop(now) {
+    if (playing) {
+      if (audioOk && !aud.paused) t = aud.currentTime;
+      else { if (clock != null) t += (now - clock) / 1000; clock = now; }
+      if (t >= D) { t = D; pause(); }
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+  big.addEventListener('click', play);
+  playBtn.addEventListener('click', () => playing ? pause() : play());
+  cv.addEventListener('click', () => playing ? pause() : play());
+  document.getElementById('restart').addEventListener('click', () => { seek(0); play(); });
+  document.getElementById('safe').addEventListener('change', e => { showSafe = e.target.checked; draw(); });
+  scrub.addEventListener('input', () => { pause(); seek(+scrub.value); });
+  document.addEventListener('keydown', e => { if (e.target === scrub) return; if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); } });
+  const fontsReady = document.fonts && document.fonts.load ? Promise.all([document.fonts.load(font(40, 700)), document.fonts.load(font(40, 600)), document.fonts.load(font(40, 500))]).catch(() => {}) : Promise.resolve();
+  draw();
+  Promise.all([imagesReady, fontsReady]).then(() => { window.reelReady = true; draw(); });
+  requestAnimationFrame(loop);
+})();
+</script>
