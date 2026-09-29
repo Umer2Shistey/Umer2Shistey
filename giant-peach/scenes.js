@@ -584,8 +584,8 @@
     layer(cam, 1, () => {
       empireState(960, 1400, 1.0, '#433660');
       const tipY = 1400 - 860;
-      const land = prog(t, 99.3, 101.4);
-      const py = lerp(-500, tipY - 150 * 0.75, E.inOutSine(land)), px = 960 + (1 - land) * 160;
+      const land = prog(t, 98.9, 101.4);
+      const py = lerp(-120, tipY - 150 * 0.75, E.inOutSine(land)), px = 960 + (1 - land) * 160;
       if (t < 101.5) flock(px, py, t, 0.9);
       else GULLS.slice(0, 40).forEach(g => { const k = prog(t, 101.5, 103.3); gull(px + g.x * (0.5 + k * 1.4), py - 300 - k * 700 + g.y * 0.3, g.s * 0.8, t, g.ph); });
       const sq = t > 101.4 ? 0.12 * Math.max(0, 1 - (t - 101.4) / 0.35) : 0;
@@ -640,7 +640,8 @@
       // kids
       KIDS.forEach((k, i) => {
         const run = E.outCubic(prog(t, 103.7 + k.dly, 104.6 + k.dly));
-        const x = lerp(k.side > 0 ? 2300 : -400, k.x, run), jump = Math.max(0, Math.sin(t * 7 + i)) * (t > 106.1 && t < 108 ? 30 : 6);
+        const aside = k.side > 0 ? E.inOutCubic(prog(t, 108.5, 109.2)) * 230 : 0;
+        const x = lerp(k.side > 0 ? 2300 : -400, k.x, run) + aside, jump = Math.max(0, Math.sin(t * 7 + i)) * (t > 106.1 && t < 108 ? 30 : 6);
         if (run > 0) kid(x, k.y, 1.25, t, k.seed, { jump, arm: t > 106.1 ? 0.8 : 0 });
       });
       // James and the bugs
@@ -648,10 +649,13 @@
       if (jIn > 0) {
         ctx.save(); ctx.globalAlpha = jIn;
         const wave = t > 114.6;
-        james(1240, 960, 1.05, t, { mood: 'happy', armL: wave ? -2.5 + Math.sin(t * 8) * 0.3 : -0.3, armR: 0.3, look: -1 });
+        glow(1240, 800, 260, 'rgba(255,236,170,0.8)', jIn * (1 - smooth(prog(t, 111, 112))));
+        const jp = E.outBack(prog(t, 108.75, 109.3));
+        james(1240, 975, 1.4 * jp, t, { mood: 'happy', armL: wave ? -2.5 + Math.sin(t * 8) * 0.3 : -0.3, armR: 0.3, look: -1 });
+        if (t < 110.2) for (let i = 0; i < 6; i++) sparkle(1240 + Math.cos(i + t * 3) * 170, 780 + Math.sin(i + t * 3) * 120, 12, '#FFF4C8', 1 - prog(t, 109.6, 110.2));
         const f = smooth(prog(t, 113.2, 114));
         ctx.globalAlpha = jIn * f;
-        ladybird(700, 960, 0.6, t); spider(560, 980, 0.55, t); grasshopper(1480, 960, 0.6, t); earthworm(1650, 990, 0.5, t); centipede(420, 1000, 0.55, t);
+        ladybird(700, 975, 0.78, t); spider(530, 995, 0.72, t); grasshopper(1500, 975, 0.78, t); earthworm(1700, 1000, 0.66, t); centipede(360, 1015, 0.72, t);
         ctx.restore();
       }
       // fireflies / hearts at the end
