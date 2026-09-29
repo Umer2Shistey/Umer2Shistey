@@ -1,0 +1,79 @@
+<title>James and the Giant Peach</title>
+<style>
+@font-face { font-family: "Fraunces Local"; src: url("assets/fraunces-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+@font-face { font-family: "Fraunces Local"; src: url("assets/fraunces-italic.woff2") format("woff2"); font-weight: 100 900; font-style: italic; font-display: block; }
+@font-face { font-family: "Fredoka Local"; src: url("assets/fredoka.woff2") format("woff2"); font-weight: 500 700; font-display: block; }
+/* Layout: one 16:9 screen with a transport bar and a scene strip beneath. Committed dark "screening room" look around a warm storybook picture. */
+:root {
+  --ground: #1A120D;
+  --panel: #251A13;
+  --line: #3E2D22;
+  --text: #FBF1DD;
+  --muted: #C2AE92;
+  --peach: #F7894F;
+  --serif: "Fraunces Local", Georgia, serif;
+  color-scheme: dark;
+}
+html, body { background: var(--ground); color: var(--text); }
+body { font-family: var(--serif); padding-inline: 16px; padding-block: 24px 40px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; }
+h1 { margin: 0; font-weight: 800; font-size: clamp(24px, 3.4vw, 38px); text-wrap: balance; }
+h1 em { color: var(--peach); font-weight: 600; }
+.meta { color: var(--muted); font-size: 15px; font-style: italic; }
+.stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+#big { position: absolute; inset: 0; margin: auto; width: 104px; height: 104px; border-radius: 50%; border: 0; background: var(--peach); color: #2B1E16; font-size: 40px; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+.transport { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+button { font: 600 15px var(--serif); color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+button:hover { border-color: var(--peach); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--peach); outline-offset: 2px; }
+#scrub { width: 100%; min-width: 0; accent-color: var(--peach); }
+#tc { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 10ch; text-align: right; }
+.scenes { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.scenes button { border-radius: 10px; text-align: left; display: grid; gap: 2px; font-weight: 500; font-size: 14px; }
+.scenes button b { font-weight: 600; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.scenes button.on { border-color: var(--peach); }
+.scenes button.on b { color: var(--peach); }
+@media (max-width: 760px) { .scenes { grid-template-columns: repeat(2, minmax(0, 1fr)); } .transport { grid-template-columns: auto auto 1fr; } #tc { grid-column: 1 / -1; text-align: left; } }
+</style>
+<div class="wrap">
+  <header><h1>James <em>and the</em> Giant Peach</h1><div class="meta">A cut-paper storybook, 2 min, synced to the narration</div></header>
+  <div class="stage"><canvas id="c" width="1920" height="1080" aria-label="Animated storybook: James and the Giant Peach"></canvas><button id="big" type="button" aria-label="Play with sound">▶</button></div>
+  <div class="transport">
+    <button id="play" type="button">Play</button><button id="restart" type="button">Restart</button>
+    <input id="scrub" type="range" min="0" max="121.5" step="0.01" value="0" aria-label="Scrub timeline"><div id="tc">0:00.0</div>
+  </div>
+  <div class="scenes" id="scenes"></div>
+</div>
+<audio id="aud" src="assets/giant-peach-audio.mp3" preload="auto"></audio>
+<script src="engine.js"></script>
+<script src="scenes.js"></script>
+<script>
+(() => {
+  const { renderAt, D, SCENES } = PEACH;
+  window.renderAt = renderAt; window.reelDuration = D;
+  const cv = document.getElementById('c'), aud = document.getElementById('aud'), big = document.getElementById('big');
+  const playBtn = document.getElementById('play'), scrub = document.getElementById('scrub'), tc = document.getElementById('tc'), scWrap = document.getElementById('scenes');
+  SCENES.forEach(([a, n]) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = `<b>${Math.floor(a / 60)}:${String(Math.floor(a % 60)).padStart(2, '0')}</b>${n}`; b.addEventListener('click', () => { pause(); seek(a + 0.2); }); scWrap.appendChild(b); });
+  let t = 0.2, playing = false, clock = null, audioOk = true;
+  aud.addEventListener('error', () => { audioOk = false; });
+  const fmt = v => `${Math.floor(v / 60)}:${(v % 60).toFixed(1).padStart(4, '0')}`;
+  function seek(v) { t = Math.min(D, Math.max(0, v)); try { aud.currentTime = t; } catch (e) {} draw(); }
+  function draw() {
+    renderAt(t); scrub.value = t; tc.textContent = fmt(t);
+    playBtn.textContent = playing ? 'Pause' : 'Play'; big.hidden = playing;
+    let k = 0; SCENES.forEach(([a], i) => { if (t >= a) k = i; }); [...scWrap.children].forEach((b, i) => b.classList.toggle('on', i === k));
+  }
+  function play() { if (t >= D - 0.05) seek(0); playing = true; clock = null; if (audioOk) { try { aud.currentTime = t; const pr = aud.play(); if (pr) pr.catch(() => { audioOk = false; }); } catch (e) { audioOk = false; } } draw(); }
+  function pause() { playing = false; aud.pause(); draw(); }
+  function loop(now) { if (playing) { if (audioOk && !aud.paused) t = aud.currentTime; else { if (clock != null) t += (now - clock) / 1000; clock = now; } if (t >= D) { t = D; pause(); } draw(); } requestAnimationFrame(loop); }
+  big.addEventListener('click', play); playBtn.addEventListener('click', () => playing ? pause() : play()); cv.addEventListener('click', () => playing ? pause() : play());
+  document.getElementById('restart').addEventListener('click', () => { seek(0); play(); });
+  scrub.addEventListener('input', () => { pause(); seek(+scrub.value); });
+  document.addEventListener('keydown', e => { if (e.target === scrub) return; if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); } });
+  draw();
+  Promise.all([document.fonts.load('900 40px "Fraunces Local"'), document.fonts.load('italic 700 40px "Fraunces Local"'), document.fonts.load('600 40px "Fredoka Local"')]).catch(() => {}).then(() => { window.reelReady = true; draw(); });
+  requestAnimationFrame(loop);
+})();
+</script>
